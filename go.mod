@@ -1,4 +1,4 @@
-module github.com/hf/nitrite
+module github.com/blocky/nitrite
 
 go 1.15
 
