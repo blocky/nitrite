@@ -8,9 +8,10 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"github.com/fxamacker/cbor/v2"
 	"math/big"
 	"time"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 // Document represents the AWS Nitro Enclave Attestation Document.
@@ -279,11 +280,11 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, ErrBadPublicKey
 	}
 
-	if nil != doc.UserData && (len(doc.UserData) < 1 || len(doc.UserData) > 512) {
+	if nil != doc.UserData && (len(doc.UserData) < 1 || len(doc.UserData) > 3866) {
 		return nil, ErrBadUserData
 	}
 
-	if nil != doc.Nonce && (len(doc.Nonce) < 1 || len(doc.Nonce) > 512) {
+	if nil != doc.Nonce && (len(doc.Nonce) < 1 || len(doc.Nonce) > 42) {
 		return nil, ErrBadNonce
 	}
 
