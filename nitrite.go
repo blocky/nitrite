@@ -291,9 +291,10 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	if !options.AllowSelfSignedCert && len(doc.CABundle) < 1 {
-		return nil, ErrBadCABundle
-	}
+	// turn of this check for self-signed certificates
+	//if !options.AllowSelfSignedCert && len(doc.CABundle) < 1 {
+	//	return nil, ErrBadCABundle
+	//}
 
 	if !options.AllowSelfSignedCert {
 		for _, item := range doc.CABundle {
