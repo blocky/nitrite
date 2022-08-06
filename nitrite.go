@@ -63,11 +63,11 @@ type VerifyOptions struct {
 	CurrentTime time.Time
 }
 
-type coseHeader struct {
+type CoseHeader struct {
 	Alg interface{} `cbor:"1,keyasint,omitempty" json:"alg,omitempty"`
 }
 
-func (h *coseHeader) AlgorithmString() (string, bool) {
+func (h *CoseHeader) AlgorithmString() (string, bool) {
 	switch h.Alg.(type) {
 	case string:
 		return h.Alg.(string), true
@@ -76,7 +76,7 @@ func (h *coseHeader) AlgorithmString() (string, bool) {
 	return "", false
 }
 
-func (h *coseHeader) AlgorithmInt() (int64, bool) {
+func (h *CoseHeader) AlgorithmInt() (int64, bool) {
 	switch h.Alg.(type) {
 	case int64:
 		return h.Alg.(int64), true
@@ -85,7 +85,7 @@ func (h *coseHeader) AlgorithmInt() (int64, bool) {
 	return 0, false
 }
 
-type cosePayload struct {
+type CosePayload struct {
 	_ struct{} `cbor:",toarray"`
 
 	Protected   []byte
@@ -181,7 +181,7 @@ func reverse(enc []byte) []byte {
 // set! You can use the SignatureOK field from the result to distinguish
 // errors.
 func Verify(data []byte, options VerifyOptions) (*Result, error) {
-	cose := cosePayload{}
+	cose := CosePayload{}
 
 	err := cbor.Unmarshal(data, &cose)
 	if nil != err {
@@ -200,7 +200,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, ErrCOSESign1EmptySignatureSection
 	}
 
-	header := coseHeader{}
+	header := CoseHeader{}
 	err = cbor.Unmarshal(cose.Protected, &header)
 	if nil != err {
 		return nil, ErrBadCOSESign1Structure
@@ -240,7 +240,13 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, ErrBadAttestationDocument
 	}
 
-	if "" == doc.ModuleID || "" == doc.Digest || 0 == doc.Timestamp || nil == doc.PCRs || nil == doc.Certificate || nil == doc.CABundle {
+	//not checking if doc.CABundle is nil as that might be the case for
+	//a self-signed Certificate
+	if "" == doc.ModuleID ||
+		"" == doc.Digest ||
+		0 == doc.Timestamp ||
+		nil == doc.PCRs ||
+		nil == doc.Certificate {
 		return nil, ErrMandatoryFieldsMissing
 	}
 
@@ -266,13 +272,16 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	if len(doc.CABundle) < 1 {
-		return nil, ErrBadCABundle
-	}
+	// turn of this check for self-signed certificates
+	//if len(doc.CABundle) < 1 {
+	//	return nil, ErrBadCABundle
+	//}
 
-	for _, item := range doc.CABundle {
-		if nil == item || len(item) < 1 || len(item) > 1024 {
-			return nil, ErrBadCABundleItem
+	if doc.CABundle != nil && len(doc.CABundle) > 0 {
+		for _, item := range doc.CABundle {
+			if nil == item || len(item) < 1 || len(item) > 1024 {
+				return nil, ErrBadCABundleItem
+			}
 		}
 	}
 
@@ -288,7 +297,12 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, ErrBadNonce
 	}
 
-	certificates := make([]*x509.Certificate, 0, len(doc.CABundle)+1)
+	var certificates []*x509.Certificate
+	if doc.CABundle != nil && len(doc.CABundle) > 0 {
+		certificates = make([]*x509.Certificate, 0, len(doc.CABundle)+1)
+	} else {
+		certificates = make([]*x509.Certificate, 1)
+	}
 
 	cert, err := x509.ParseCertificate(doc.Certificate)
 	if nil != err {
@@ -307,14 +321,16 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 
 	intermediates := x509.NewCertPool()
 
-	for _, item := range doc.CABundle {
-		cert, err := x509.ParseCertificate(item)
-		if nil != err {
-			return nil, err
-		}
+	if doc.CABundle != nil && len(doc.CABundle) > 0 {
+		for _, item := range doc.CABundle {
+			cert, err := x509.ParseCertificate(item)
+			if nil != err {
+				return nil, err
+			}
 
-		intermediates.AddCert(cert)
-		certificates = append(certificates, cert)
+			intermediates.AddCert(cert)
+			certificates = append(certificates, cert)
+		}
 	}
 
 	roots := options.Roots
@@ -336,14 +352,31 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		},
 	})
 
-	sigStruct, _ := cbor.Marshal(&coseSignature{
+	//todo: remove this
+	coseSig := coseSignature{
 		Context:     "Signature1",
 		Protected:   cose.Protected,
 		ExternalAAD: []byte{},
 		Payload:     cose.Payload,
-	})
+	}
 
-	signatureOk := checkECDSASignature(cert.PublicKey.(*ecdsa.PublicKey), sigStruct, cose.Signature)
+	sigStruct, err := cbor.Marshal(&coseSig)
+	if err != nil {
+		return nil, err //todo: add error code, since previously unhandled
+	}
+
+	//sigStruct, _ := cbor.Marshal(&coseSignature{
+	//	Context:     "Signature1",
+	//	Protected:   cose.Protected,
+	//	ExternalAAD: []byte{},
+	//	Payload:     cose.Payload,
+	//})
+
+	signatureOk := checkECDSASignature(
+		cert.PublicKey.(*ecdsa.PublicKey),
+		sigStruct,
+		cose.Signature,
+	)
 
 	if !signatureOk && nil == err {
 		err = ErrBadSignature
