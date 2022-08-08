@@ -121,7 +121,6 @@ var (
 	ErrBadPCRs                          error = errors.New("Payload 'pcrs' is less than 1 or more than 32")
 	ErrBadPCRIndex                      error = errors.New("Payload 'pcrs' key index is not in [0, 32)")
 	ErrBadPCRValue                      error = errors.New("Payload 'pcrs' value is nil or not of length {32,48,64}")
-	ErrBadCABundle                      error = errors.New("Payload 'cabundle' has 0 elements")
 	ErrBadCABundleItem                  error = errors.New("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
 	ErrBadPublicKey                     error = errors.New("Payload 'public_key' has a value of length not in [1, 1024]")
 	ErrBadUserData                      error = errors.New("Payload 'user_data' has a value of length not in [1, 512]")
@@ -129,6 +128,7 @@ var (
 	ErrBadCertificatePublicKeyAlgorithm error = errors.New("Payload 'certificate' has a bad public key algorithm (not ECDSA)")
 	ErrBadCertificateSigningAlgorithm   error = errors.New("Payload 'certificate' has a bad public key signing algorithm (not ECDSAWithSHA384)")
 	ErrBadSignature                     error = errors.New("Payload's signature does not match signature from certificate")
+	ErrMarshallingCoseSignature         error = errors.New("Could not marshal COSE signature")
 )
 
 const (
@@ -240,8 +240,6 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, ErrBadAttestationDocument
 	}
 
-	//not checking if doc.CABundle is nil as that might be the case for
-	//a self-signed Certificate
 	if "" == doc.ModuleID ||
 		"" == doc.Digest ||
 		0 == doc.Timestamp ||
@@ -272,11 +270,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	// turn of this check for self-signed certificates
-	//if len(doc.CABundle) < 1 {
-	//	return nil, ErrBadCABundle
-	//}
-
+	// the attestation may not include CA bundle if using a self-signed cert
 	if doc.CABundle != nil && len(doc.CABundle) > 0 {
 		for _, item := range doc.CABundle {
 			if nil == item || len(item) < 1 || len(item) > 1024 {
@@ -352,7 +346,6 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		},
 	})
 
-	//todo: remove this
 	coseSig := coseSignature{
 		Context:     "Signature1",
 		Protected:   cose.Protected,
@@ -362,15 +355,8 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 
 	sigStruct, err := cbor.Marshal(&coseSig)
 	if err != nil {
-		return nil, err //todo: add error code, since previously unhandled
+		return nil, ErrMarshallingCoseSignature
 	}
-
-	//sigStruct, _ := cbor.Marshal(&coseSignature{
-	//	Context:     "Signature1",
-	//	Protected:   cose.Protected,
-	//	ExternalAAD: []byte{},
-	//	Payload:     cose.Payload,
-	//})
 
 	signatureOk := checkECDSASignature(
 		cert.PublicKey.(*ecdsa.PublicKey),
