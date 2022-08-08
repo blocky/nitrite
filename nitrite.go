@@ -137,7 +137,6 @@ var (
 	ErrBadPCRs                          error = errors.New("Payload 'pcrs' is less than 1 or more than 32")
 	ErrBadPCRIndex                      error = errors.New("Payload 'pcrs' key index is not in [0, 32)")
 	ErrBadPCRValue                      error = errors.New("Payload 'pcrs' value is nil or not of length {32,48,64}")
-	ErrBadCABundle                      error = errors.New("Payload 'cabundle' has 0 elements")
 	ErrBadCABundleItem                  error = errors.New("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
 	ErrBadPublicKey                     error = fmt.Errorf("Payload 'public_key' has a value of length not in [1, %d]", maxPublicKeyLen)
 	ErrBadUserData                      error = fmt.Errorf("Payload 'user_data' has a value of length not in [1, %d]", maxUserDataLen)
