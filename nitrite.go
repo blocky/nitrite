@@ -59,8 +59,9 @@ type Result struct {
 // `time.Now()` will be used. It is a strong recommendation you explicitly
 // supply this value.
 type VerifyOptions struct {
-	Roots       *x509.CertPool
-	CurrentTime time.Time
+	Roots               *x509.CertPool
+	CurrentTime         time.Time
+	AllowSelfSignedCert bool
 }
 
 type CoseHeader struct {
@@ -248,6 +249,10 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, ErrMandatoryFieldsMissing
 	}
 
+	if !options.AllowSelfSignedCert && nil == doc.CABundle {
+		return nil, ErrMandatoryFieldsMissing
+	}
+
 	if "SHA384" != doc.Digest {
 		return nil, ErrBadDigest
 	}
@@ -271,7 +276,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 	}
 
 	// the attestation may not include CA bundle if using a self-signed cert
-	if doc.CABundle != nil && len(doc.CABundle) > 0 {
+	if !options.AllowSelfSignedCert {
 		for _, item := range doc.CABundle {
 			if nil == item || len(item) < 1 || len(item) > 1024 {
 				return nil, ErrBadCABundleItem
@@ -292,7 +297,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 	}
 
 	var certificates []*x509.Certificate
-	if doc.CABundle != nil && len(doc.CABundle) > 0 {
+	if !options.AllowSelfSignedCert {
 		certificates = make([]*x509.Certificate, 0, len(doc.CABundle)+1)
 	} else {
 		certificates = make([]*x509.Certificate, 1)
@@ -315,7 +320,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 
 	intermediates := x509.NewCertPool()
 
-	if doc.CABundle != nil && len(doc.CABundle) > 0 {
+	if !options.AllowSelfSignedCert {
 		for _, item := range doc.CABundle {
 			cert, err := x509.ParseCertificate(item)
 			if nil != err {
