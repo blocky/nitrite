@@ -104,21 +104,6 @@ type coseSignature struct {
 	Payload     []byte
 }
 
-// Size of these fields (in bytes) comes from AWS Nitro documentation at
-// https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
-// from May 4, 2022.
-// With maxNonceLen = 1024, maxUserDataLen = 1024, and maxPublicKeyLen = 1024
-// the total AttestationLen = 6591.
-// An experiment on August 8, 2022, allowed user data to be maximized to
-// maxUserDataLen = 3868 with maxNonceLen = 40 and maxPublicKeyLen = 1024 for
-// the total AttestationLen = 8451.
-const (
-	maxNonceLen       = 1024
-	maxUserDataLen    = 1024
-	maxPublicKeyLen   = 1024
-	MaxAttestationLen = 6591
-)
-
 // Errors that are encountered when manipulating the COSESign1 structure.
 var (
 	ErrBadCOSESign1Structure          error = errors.New("Data is not a COSESign1 array")
@@ -137,10 +122,11 @@ var (
 	ErrBadPCRs                          error = errors.New("Payload 'pcrs' is less than 1 or more than 32")
 	ErrBadPCRIndex                      error = errors.New("Payload 'pcrs' key index is not in [0, 32)")
 	ErrBadPCRValue                      error = errors.New("Payload 'pcrs' value is nil or not of length {32,48,64}")
+	ErrBadCABundle                      error = errors.New("Payload 'cabundle' has 0 elements")
 	ErrBadCABundleItem                  error = errors.New("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
-	ErrBadPublicKey                     error = fmt.Errorf("Payload 'public_key' has a value of length not in [1, %d]", maxPublicKeyLen)
-	ErrBadUserData                      error = fmt.Errorf("Payload 'user_data' has a value of length not in [1, %d]", maxUserDataLen)
-	ErrBadNonce                         error = fmt.Errorf("Payload 'nonce' has a value of length not in [1, %d]", maxNonceLen)
+	ErrBadPublicKey                     error = errors.New("Payload 'public_key' has a value of length not in [1, 1024]")
+	ErrBadUserData                      error = errors.New("Payload 'user_data' has a value of length not in [1, 512]")
+	ErrBadNonce                         error = errors.New("Payload 'nonce' has a value of length not in [1, 512]")
 	ErrBadCertificatePublicKeyAlgorithm error = errors.New("Payload 'certificate' has a bad public key algorithm (not ECDSA)")
 	ErrBadCertificateSigningAlgorithm   error = errors.New("Payload 'certificate' has a bad public key signing algorithm (not ECDSAWithSHA384)")
 	ErrBadSignature                     error = errors.New("Payload's signature does not match signature from certificate")
@@ -290,10 +276,9 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	// turn of this check for self-signed certificates
-	//if !options.AllowSelfSignedCert && len(doc.CABundle) < 1 {
-	//	return nil, ErrBadCABundle
-	//}
+	if !options.AllowSelfSignedCert && len(doc.CABundle) < 1 {
+		return nil, ErrBadCABundle
+	}
 
 	if !options.AllowSelfSignedCert {
 		for _, item := range doc.CABundle {
@@ -303,16 +288,17 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	if nil != doc.PublicKey && (len(doc.PublicKey) < 1 ||
-		len(doc.PublicKey) > maxPublicKeyLen) {
+	// Size of these fields comes from AWS Nitro documentation at
+	// https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
+	// from May 4, 2022. Experimentally verified values August 8, 2022, allow
+	// UserData limit of 3866B with a Nonce of 42B.
+	if nil != doc.PublicKey && (len(doc.PublicKey) < 1 || len(doc.PublicKey) > 1024) {
 		return nil, ErrBadPublicKey
 	}
-	if nil != doc.UserData && (len(doc.UserData) < 1 ||
-		len(doc.UserData) > maxUserDataLen) {
+	if nil != doc.UserData && (len(doc.UserData) < 1 || len(doc.UserData) > 1024) {
 		return nil, ErrBadUserData
 	}
-	if nil != doc.Nonce && (len(doc.Nonce) < 1 ||
-		len(doc.Nonce) > maxNonceLen) {
+	if nil != doc.Nonce && (len(doc.Nonce) < 1 || len(doc.Nonce) > 1024) {
 		return nil, ErrBadNonce
 	}
 
