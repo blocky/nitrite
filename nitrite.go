@@ -122,6 +122,7 @@ var (
 	ErrBadPCRs                          error = errors.New("Payload 'pcrs' is less than 1 or more than 32")
 	ErrBadPCRIndex                      error = errors.New("Payload 'pcrs' key index is not in [0, 32)")
 	ErrBadPCRValue                      error = errors.New("Payload 'pcrs' value is nil or not of length {32,48,64}")
+	ErrBadCABundle                      error = errors.New("Payload 'cabundle' has 0 elements")
 	ErrBadCABundleItem                  error = errors.New("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
 	ErrBadPublicKey                     error = errors.New("Payload 'public_key' has a value of length not in [1, 1024]")
 	ErrBadUserData                      error = errors.New("Payload 'user_data' has a value of length not in [1, 512]")
@@ -275,7 +276,10 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	// the attestation may not include CA bundle if using a self-signed cert
+	if !options.AllowSelfSignedCert && len(doc.CABundle) < 1 {
+		return nil, ErrBadCABundle
+	}
+
 	if !options.AllowSelfSignedCert {
 		for _, item := range doc.CABundle {
 			if nil == item || len(item) < 1 || len(item) > 1024 {
@@ -284,15 +288,17 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
+	// Size of these fields comes from AWS Nitro documentation at
+	// https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
+	// from May 4, 2022. Experimentally verified values August 8, 2022, allow
+	// UserData limit of 3866B with a Nonce of 42B.
 	if nil != doc.PublicKey && (len(doc.PublicKey) < 1 || len(doc.PublicKey) > 1024) {
 		return nil, ErrBadPublicKey
 	}
-
-	if nil != doc.UserData && (len(doc.UserData) < 1 || len(doc.UserData) > 3866) {
+	if nil != doc.UserData && (len(doc.UserData) < 1 || len(doc.UserData) > 1024) {
 		return nil, ErrBadUserData
 	}
-
-	if nil != doc.Nonce && (len(doc.Nonce) < 1 || len(doc.Nonce) > 42) {
+	if nil != doc.Nonce && (len(doc.Nonce) < 1 || len(doc.Nonce) > 1024) {
 		return nil, ErrBadNonce
 	}
 
