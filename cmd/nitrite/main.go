@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/hf/nitrite"
 	"os"
 	"time"
+
+	"github.com/blocky/nitrite"
 )
 
 var (

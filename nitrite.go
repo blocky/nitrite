@@ -8,9 +8,10 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"github.com/fxamacker/cbor/v2"
 	"math/big"
 	"time"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 // Document represents the AWS Nitro Enclave Attestation Document.
@@ -58,15 +59,16 @@ type Result struct {
 // `time.Now()` will be used. It is a strong recommendation you explicitly
 // supply this value.
 type VerifyOptions struct {
-	Roots       *x509.CertPool
-	CurrentTime time.Time
+	Roots               *x509.CertPool
+	CurrentTime         time.Time
+	AllowSelfSignedCert bool
 }
 
-type coseHeader struct {
+type CoseHeader struct {
 	Alg interface{} `cbor:"1,keyasint,omitempty" json:"alg,omitempty"`
 }
 
-func (h *coseHeader) AlgorithmString() (string, bool) {
+func (h *CoseHeader) AlgorithmString() (string, bool) {
 	switch h.Alg.(type) {
 	case string:
 		return h.Alg.(string), true
@@ -75,7 +77,7 @@ func (h *coseHeader) AlgorithmString() (string, bool) {
 	return "", false
 }
 
-func (h *coseHeader) AlgorithmInt() (int64, bool) {
+func (h *CoseHeader) AlgorithmInt() (int64, bool) {
 	switch h.Alg.(type) {
 	case int64:
 		return h.Alg.(int64), true
@@ -84,7 +86,7 @@ func (h *coseHeader) AlgorithmInt() (int64, bool) {
 	return 0, false
 }
 
-type cosePayload struct {
+type CosePayload struct {
 	_ struct{} `cbor:",toarray"`
 
 	Protected   []byte
@@ -128,6 +130,7 @@ var (
 	ErrBadCertificatePublicKeyAlgorithm error = errors.New("Payload 'certificate' has a bad public key algorithm (not ECDSA)")
 	ErrBadCertificateSigningAlgorithm   error = errors.New("Payload 'certificate' has a bad public key signing algorithm (not ECDSAWithSHA384)")
 	ErrBadSignature                     error = errors.New("Payload's signature does not match signature from certificate")
+	ErrMarshallingCoseSignature         error = errors.New("Could not marshal COSE signature")
 )
 
 const (
@@ -180,7 +183,7 @@ func reverse(enc []byte) []byte {
 // set! You can use the SignatureOK field from the result to distinguish
 // errors.
 func Verify(data []byte, options VerifyOptions) (*Result, error) {
-	cose := cosePayload{}
+	cose := CosePayload{}
 
 	err := cbor.Unmarshal(data, &cose)
 	if nil != err {
@@ -199,7 +202,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, ErrCOSESign1EmptySignatureSection
 	}
 
-	header := coseHeader{}
+	header := CoseHeader{}
 	err = cbor.Unmarshal(cose.Protected, &header)
 	if nil != err {
 		return nil, ErrBadCOSESign1Structure
@@ -239,7 +242,15 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, ErrBadAttestationDocument
 	}
 
-	if "" == doc.ModuleID || "" == doc.Digest || 0 == doc.Timestamp || nil == doc.PCRs || nil == doc.Certificate || nil == doc.CABundle {
+	if "" == doc.ModuleID ||
+		"" == doc.Digest ||
+		0 == doc.Timestamp ||
+		nil == doc.PCRs ||
+		nil == doc.Certificate {
+		return nil, ErrMandatoryFieldsMissing
+	}
+
+	if !options.AllowSelfSignedCert && nil == doc.CABundle {
 		return nil, ErrMandatoryFieldsMissing
 	}
 
@@ -265,29 +276,38 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	if len(doc.CABundle) < 1 {
+	if !options.AllowSelfSignedCert && len(doc.CABundle) < 1 {
 		return nil, ErrBadCABundle
 	}
 
-	for _, item := range doc.CABundle {
-		if nil == item || len(item) < 1 || len(item) > 1024 {
-			return nil, ErrBadCABundleItem
+	if !options.AllowSelfSignedCert {
+		for _, item := range doc.CABundle {
+			if nil == item || len(item) < 1 || len(item) > 1024 {
+				return nil, ErrBadCABundleItem
+			}
 		}
 	}
 
+	// Size of these fields comes from AWS Nitro documentation at
+	// https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
+	// from May 4, 2022. Experimentally verified values August 8, 2022, allow
+	// UserData limit of 3866B with a Nonce of 42B.
 	if nil != doc.PublicKey && (len(doc.PublicKey) < 1 || len(doc.PublicKey) > 1024) {
 		return nil, ErrBadPublicKey
 	}
-
-	if nil != doc.UserData && (len(doc.UserData) < 1 || len(doc.UserData) > 512) {
+	if nil != doc.UserData && (len(doc.UserData) < 1 || len(doc.UserData) > 1024) {
 		return nil, ErrBadUserData
 	}
-
-	if nil != doc.Nonce && (len(doc.Nonce) < 1 || len(doc.Nonce) > 512) {
+	if nil != doc.Nonce && (len(doc.Nonce) < 1 || len(doc.Nonce) > 1024) {
 		return nil, ErrBadNonce
 	}
 
-	certificates := make([]*x509.Certificate, 0, len(doc.CABundle)+1)
+	var certificates []*x509.Certificate
+	if !options.AllowSelfSignedCert {
+		certificates = make([]*x509.Certificate, 0, len(doc.CABundle)+1)
+	} else {
+		certificates = make([]*x509.Certificate, 1)
+	}
 
 	cert, err := x509.ParseCertificate(doc.Certificate)
 	if nil != err {
@@ -306,14 +326,16 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 
 	intermediates := x509.NewCertPool()
 
-	for _, item := range doc.CABundle {
-		cert, err := x509.ParseCertificate(item)
-		if nil != err {
-			return nil, err
-		}
+	if !options.AllowSelfSignedCert {
+		for _, item := range doc.CABundle {
+			cert, err := x509.ParseCertificate(item)
+			if nil != err {
+				return nil, err
+			}
 
-		intermediates.AddCert(cert)
-		certificates = append(certificates, cert)
+			intermediates.AddCert(cert)
+			certificates = append(certificates, cert)
+		}
 	}
 
 	roots := options.Roots
@@ -335,14 +357,23 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		},
 	})
 
-	sigStruct, _ := cbor.Marshal(&coseSignature{
+	coseSig := coseSignature{
 		Context:     "Signature1",
 		Protected:   cose.Protected,
 		ExternalAAD: []byte{},
 		Payload:     cose.Payload,
-	})
+	}
 
-	signatureOk := checkECDSASignature(cert.PublicKey.(*ecdsa.PublicKey), sigStruct, cose.Signature)
+	sigStruct, err := cbor.Marshal(&coseSig)
+	if err != nil {
+		return nil, ErrMarshallingCoseSignature
+	}
+
+	signatureOk := checkECDSASignature(
+		cert.PublicKey.(*ecdsa.PublicKey),
+		sigStruct,
+		cose.Signature,
+	)
 
 	if !signatureOk && nil == err {
 		err = ErrBadSignature
