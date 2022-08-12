@@ -133,6 +133,24 @@ var (
 	ErrMarshallingCoseSignature         error = errors.New("Could not marshal COSE signature")
 )
 
+// Size of these fields comes from AWS Nitro documentation at
+// https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
+// from May 4, 2022.
+// With maxNonceLen = 1024, maxUserDataLen = 1024, and maxPublicKeyLen = 1024
+// the total AttestationLen = ???.
+// An experiment on August 8, 2022, allowed user data to be maximized to
+// maxUserDataLen = 3866 with maxNonceLen = 42 and maxPublicKeyLen = 1024 for
+// the total AttestationLen = ???.
+
+// UserData limit of 3866B with a Nonce of 42B and key size of 1024.
+// The total observed attestation size was 5850? //todo: finish this
+const (
+	maxNonceLen       = 1024
+	maxUserDataLen    = 1024
+	maxPublicKeyLen   = 1024
+	MaxAttestationLen = 5000
+)
+
 const (
 	// DefaultCARoots contains the PEM encoded roots for verifying Nitro
 	// Enclave attestation signatures. You can download them from
@@ -288,17 +306,16 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	// Size of these fields comes from AWS Nitro documentation at
-	// https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
-	// from May 4, 2022. Experimentally verified values August 8, 2022, allow
-	// UserData limit of 3866B with a Nonce of 42B.
-	if nil != doc.PublicKey && (len(doc.PublicKey) < 1 || len(doc.PublicKey) > 1024) {
+	if nil != doc.PublicKey && (len(doc.PublicKey) < 1 ||
+		len(doc.PublicKey) > maxPublicKeyLen) {
 		return nil, ErrBadPublicKey
 	}
-	if nil != doc.UserData && (len(doc.UserData) < 1 || len(doc.UserData) > 1024) {
+	if nil != doc.UserData && (len(doc.UserData) < 1 ||
+		len(doc.UserData) > maxUserDataLen) {
 		return nil, ErrBadUserData
 	}
-	if nil != doc.Nonce && (len(doc.Nonce) < 1 || len(doc.Nonce) > 1024) {
+	if nil != doc.Nonce && (len(doc.Nonce) < 1 ||
+		len(doc.Nonce) > maxNonceLen) {
 		return nil, ErrBadNonce
 	}
 
