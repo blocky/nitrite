@@ -104,6 +104,21 @@ type coseSignature struct {
 	Payload     []byte
 }
 
+// Size of these fields (in bytes) comes from AWS Nitro documentation at
+// https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
+// from May 4, 2022.
+// With maxNonceLen = 1024, maxUserDataLen = 1024, and maxPublicKeyLen = 1024
+// the total AttestationLen = 6591.
+// An experiment on August 8, 2022, allowed user data to be maximized to
+// maxUserDataLen = 3868 with maxNonceLen = 40 and maxPublicKeyLen = 1024 for
+// the total AttestationLen = 8451.
+const (
+	maxNonceLen       = 1024
+	maxUserDataLen    = 1024
+	maxPublicKeyLen   = 1024
+	MaxAttestationLen = 6591
+)
+
 // Errors that are encountered when manipulating the COSESign1 structure.
 var (
 	ErrBadCOSESign1Structure          error = errors.New("Data is not a COSESign1 array")
@@ -124,31 +139,13 @@ var (
 	ErrBadPCRValue                      error = errors.New("Payload 'pcrs' value is nil or not of length {32,48,64}")
 	ErrBadCABundle                      error = errors.New("Payload 'cabundle' has 0 elements")
 	ErrBadCABundleItem                  error = errors.New("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
-	ErrBadPublicKey                     error = errors.New("Payload 'public_key' has a value of length not in [1, 1024]")
-	ErrBadUserData                      error = errors.New("Payload 'user_data' has a value of length not in [1, 512]")
-	ErrBadNonce                         error = errors.New("Payload 'nonce' has a value of length not in [1, 512]")
+	ErrBadPublicKey                     error = fmt.Errorf("Payload 'public_key' has a value of length not in [1, %d]", maxPublicKeyLen)
+	ErrBadUserData                      error = fmt.Errorf("Payload 'user_data' has a value of length not in [1, %d]", maxUserDataLen)
+	ErrBadNonce                         error = fmt.Errorf("Payload 'nonce' has a value of length not in [1, %d]", maxNonceLen)
 	ErrBadCertificatePublicKeyAlgorithm error = errors.New("Payload 'certificate' has a bad public key algorithm (not ECDSA)")
 	ErrBadCertificateSigningAlgorithm   error = errors.New("Payload 'certificate' has a bad public key signing algorithm (not ECDSAWithSHA384)")
 	ErrBadSignature                     error = errors.New("Payload's signature does not match signature from certificate")
 	ErrMarshallingCoseSignature         error = errors.New("Could not marshal COSE signature")
-)
-
-// Size of these fields comes from AWS Nitro documentation at
-// https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
-// from May 4, 2022.
-// With maxNonceLen = 1024, maxUserDataLen = 1024, and maxPublicKeyLen = 1024
-// the total AttestationLen = ???.
-// An experiment on August 8, 2022, allowed user data to be maximized to
-// maxUserDataLen = 3866 with maxNonceLen = 42 and maxPublicKeyLen = 1024 for
-// the total AttestationLen = ???.
-
-// UserData limit of 3866B with a Nonce of 42B and key size of 1024.
-// The total observed attestation size was 5850? //todo: finish this
-const (
-	maxNonceLen       = 1024
-	maxUserDataLen    = 1024
-	maxPublicKeyLen   = 1024
-	MaxAttestationLen = 5000
 )
 
 const (
