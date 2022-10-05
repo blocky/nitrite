@@ -114,7 +114,7 @@ type coseSignature struct {
 // the total AttestationLen = 8451.
 const (
 	maxNonceLen       = 1024
-	maxUserDataLen    = 1024
+	maxUserDataLen    = 2048
 	maxPublicKeyLen   = 1024
 	MaxAttestationLen = 6591
 )
@@ -128,20 +128,29 @@ var (
 	ErrCOSESign1BadAlgorithm          error = errors.New("COSESign1 algorithm not ECDSA384")
 )
 
-// Errors encountered when parsing the CBOR attestation document.
+// Errors encountered when parsing the CoseBytes attestation document.
 var (
-	ErrBadAttestationDocument           error = errors.New("Bad attestation document")
-	ErrMandatoryFieldsMissing           error = errors.New("One or more of mandatory fields missing")
-	ErrBadDigest                        error = errors.New("Payload 'digest' is not SHA384")
-	ErrBadTimestamp                     error = errors.New("Payload 'timestamp' is 0 or less")
-	ErrBadPCRs                          error = errors.New("Payload 'pcrs' is less than 1 or more than 32")
-	ErrBadPCRIndex                      error = errors.New("Payload 'pcrs' key index is not in [0, 32)")
-	ErrBadPCRValue                      error = errors.New("Payload 'pcrs' value is nil or not of length {32,48,64}")
-	ErrBadCABundle                      error = errors.New("Payload 'cabundle' has 0 elements")
-	ErrBadCABundleItem                  error = errors.New("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
-	ErrBadPublicKey                     error = fmt.Errorf("Payload 'public_key' has a value of length not in [1, %d]", maxPublicKeyLen)
-	ErrBadUserData                      error = fmt.Errorf("Payload 'user_data' has a value of length not in [1, %d]", maxUserDataLen)
-	ErrBadNonce                         error = fmt.Errorf("Payload 'nonce' has a value of length not in [1, %d]", maxNonceLen)
+	ErrBadAttestationDocument error = errors.New("Bad attestation document")
+	ErrMandatoryFieldsMissing error = errors.New("One or more of mandatory fields missing")
+	ErrBadDigest              error = errors.New("Payload 'digest' is not SHA384")
+	ErrBadTimestamp           error = errors.New("Payload 'timestamp' is 0 or less")
+	ErrBadPCRs                error = errors.New("Payload 'pcrs' is less than 1 or more than 32")
+	ErrBadPCRIndex            error = errors.New("Payload 'pcrs' key index is not in [0, 32)")
+	ErrBadPCRValue            error = errors.New("Payload 'pcrs' value is nil or not of length {32,48,64}")
+	ErrBadCABundle            error = errors.New("Payload 'cabundle' has 0 elements")
+	ErrBadCABundleItem        error = errors.New("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
+	ErrBadPublicKey           error = fmt.Errorf(
+		"Payload 'public_key' has a value of length not in [1, %d]",
+		maxPublicKeyLen,
+	)
+	ErrBadUserData error = fmt.Errorf(
+		"Payload 'user_data' has a value of length not in [1, %d]",
+		maxUserDataLen,
+	)
+	ErrBadNonce error = fmt.Errorf(
+		"Payload 'nonce' has a value of length not in [1, %d]",
+		maxNonceLen,
+	)
 	ErrBadCertificatePublicKeyAlgorithm error = errors.New("Payload 'certificate' has a bad public key algorithm (not ECDSA)")
 	ErrBadCertificateSigningAlgorithm   error = errors.New("Payload 'certificate' has a bad public key signing algorithm (not ECDSAWithSHA384)")
 	ErrBadSignature                     error = errors.New("Payload's signature does not match signature from certificate")
@@ -181,6 +190,24 @@ func reverse(enc []byte) []byte {
 	}
 
 	return rev
+}
+
+func CoseToDocument(coseBytes []byte) (Document, error) {
+	cose := CosePayload{}
+
+	err := cbor.Unmarshal(coseBytes, &cose)
+	if nil != err {
+		return Document{}, ErrBadCOSESign1Structure
+	}
+
+	attestDoc := Document{}
+
+	err = cbor.Unmarshal(cose.Payload, &attestDoc)
+	if nil != err {
+		return Document{}, ErrBadAttestationDocument
+	}
+
+	return attestDoc, nil
 }
 
 // Verify verifies the attestation payload from `data` with the provided
@@ -362,14 +389,16 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		currentTime = time.Now()
 	}
 
-	_, err = cert.Verify(x509.VerifyOptions{
-		Intermediates: intermediates,
-		Roots:         roots,
-		CurrentTime:   currentTime,
-		KeyUsages: []x509.ExtKeyUsage{
-			x509.ExtKeyUsageAny,
+	_, err = cert.Verify(
+		x509.VerifyOptions{
+			Intermediates: intermediates,
+			Roots:         roots,
+			CurrentTime:   currentTime,
+			KeyUsages: []x509.ExtKeyUsage{
+				x509.ExtKeyUsageAny,
+			},
 		},
-	})
+	)
 
 	coseSig := coseSignature{
 		Context:     "Signature1",
@@ -405,7 +434,10 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 	}, err
 }
 
-func checkECDSASignature(publicKey *ecdsa.PublicKey, sigStruct, signature []byte) bool {
+func checkECDSASignature(
+	publicKey *ecdsa.PublicKey,
+	sigStruct, signature []byte,
+) bool {
 	// https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
 
 	var hashSigStruct []byte = nil
@@ -428,7 +460,12 @@ func checkECDSASignature(publicKey *ecdsa.PublicKey, sigStruct, signature []byte
 		hashSigStruct = h[:]
 
 	default:
-		panic(fmt.Sprintf("unknown ECDSA curve name %v", publicKey.Curve.Params().Name))
+		panic(
+			fmt.Sprintf(
+				"unknown ECDSA curve name %v",
+				publicKey.Curve.Params().Name,
+			),
+		)
 	}
 
 	if len(signature) != 2*len(hashSigStruct) {
