@@ -140,15 +140,15 @@ var (
 	ErrBadCABundle            error = errors.New("Payload 'cabundle' has 0 elements")
 	ErrBadCABundleItem        error = errors.New("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
 	ErrBadPublicKey           error = fmt.Errorf(
-		"Payload 'public_key' has a value of length not in [1, %d]",
+		"Payload 'public_key' length greater than %d",
 		maxPublicKeyLen,
 	)
 	ErrBadUserData error = fmt.Errorf(
-		"Payload 'user_data' has a value of length not in [1, %d]",
+		"Payload 'user_data' length greater than %d",
 		maxUserDataLen,
 	)
 	ErrBadNonce error = fmt.Errorf(
-		"Payload 'nonce' has a value of length not in [1, %d]",
+		"Payload 'nonce' length greater than %d",
 		maxNonceLen,
 	)
 	ErrBadCertificatePublicKeyAlgorithm error = errors.New("Payload 'certificate' has a bad public key algorithm (not ECDSA)")
@@ -330,16 +330,13 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	if nil != doc.PublicKey && (len(doc.PublicKey) < 1 ||
-		len(doc.PublicKey) > maxPublicKeyLen) {
+	if nil != doc.PublicKey && len(doc.PublicKey) > maxPublicKeyLen {
 		return nil, ErrBadPublicKey
 	}
-	if nil != doc.UserData && (len(doc.UserData) < 1 ||
-		len(doc.UserData) > maxUserDataLen) {
+	if nil != doc.UserData && len(doc.UserData) > maxUserDataLen {
 		return nil, ErrBadUserData
 	}
-	if nil != doc.Nonce && (len(doc.Nonce) < 1 ||
-		len(doc.Nonce) > maxNonceLen) {
+	if nil != doc.Nonce && len(doc.Nonce) > maxNonceLen {
 		return nil, ErrBadNonce
 	}
 
