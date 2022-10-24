@@ -192,24 +192,6 @@ func reverse(enc []byte) []byte {
 	return rev
 }
 
-func CoseToDocument(coseBytes []byte) (Document, error) {
-	cose := CosePayload{}
-
-	err := cbor.Unmarshal(coseBytes, &cose)
-	if nil != err {
-		return Document{}, ErrBadCOSESign1Structure
-	}
-
-	attestDoc := Document{}
-
-	err = cbor.Unmarshal(cose.Payload, &attestDoc)
-	if nil != err {
-		return Document{}, ErrBadAttestationDocument
-	}
-
-	return attestDoc, nil
-}
-
 // Verify verifies the attestation payload from `data` with the provided
 // verification options. If the options specify `Roots` as `nil`, the
 // `DefaultCARoot` will be used. If you do not specify `CurrentTime`,
