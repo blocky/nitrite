@@ -128,7 +128,7 @@ var (
 	ErrCOSESign1BadAlgorithm          error = errors.New("COSESign1 algorithm not ECDSA384")
 )
 
-// Errors encountered when parsing the CoseBytes attestation document.
+// Errors encountered when parsing the CBOR attestation document.
 var (
 	ErrBadAttestationDocument error = errors.New("Bad attestation document")
 	ErrMandatoryFieldsMissing error = errors.New("One or more of mandatory fields missing")
