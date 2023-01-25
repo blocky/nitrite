@@ -378,6 +378,9 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 			},
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	coseSig := coseSignature{
 		Context:     "Signature1",
