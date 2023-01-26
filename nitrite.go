@@ -359,11 +359,11 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 	}
 
 	roots := options.Roots
-	if cert.IsCA {
-		roots.AddCert(cert)
-	}
 	if nil == roots {
 		roots = defaultRoot
+	}
+	if cert.IsCA {
+		roots.AddCert(cert)
 	}
 
 	currentTime := options.CurrentTime
