@@ -281,7 +281,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 	}
 
 	for key, value := range doc.PCRs {
-		if key < 0 || key > 31 {
+		if key > 31 {
 			return nil, ErrBadPCRIndex
 		}
 
