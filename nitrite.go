@@ -128,7 +128,7 @@ var (
 	ErrCOSESign1BadAlgorithm          error = errors.New("COSESign1 algorithm not ECDSA384")
 )
 
-// Errors encountered when parsing the CBOR attestation document.
+// Errors encountered when parsing the CoseBytes attestation document.
 var (
 	ErrBadAttestationDocument error = errors.New("Bad attestation document")
 	ErrMandatoryFieldsMissing error = errors.New("One or more of mandatory fields missing")
@@ -180,16 +180,6 @@ func createAWSNitroRoot() *x509.CertPool {
 	}
 
 	return pool
-}
-
-func reverse(enc []byte) []byte {
-	rev := make([]byte, len(enc))
-
-	for i, b := range enc {
-		rev[len(enc)-i-1] = b
-	}
-
-	return rev
 }
 
 // Verify verifies the attestation payload from `data` with the provided
@@ -291,7 +281,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 	}
 
 	for key, value := range doc.PCRs {
-		if key < 0 || key > 31 {
+		if key > 31 {
 			return nil, ErrBadPCRIndex
 		}
 
@@ -362,6 +352,9 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 	if nil == roots {
 		roots = defaultRoot
 	}
+	if cert.IsCA {
+		roots.AddCert(cert)
+	}
 
 	currentTime := options.CurrentTime
 	if currentTime.IsZero() {
@@ -378,6 +371,9 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 			},
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	coseSig := coseSignature{
 		Context:     "Signature1",

@@ -13,7 +13,7 @@ It's fairly simple to use it, so here's an example:
 ```go
 import (
 	"bytes"
-	"github.com/hf/nitrite"
+	"github.com/blocky/nitrite"
 	"time"
 )
 
@@ -44,10 +44,10 @@ Alternatively, you can supply your own copy of the root CA.
 Copyright &copy; 2021 Stojan Dimitrovski. Licensed under the MIT License. See
 `LICENSE` for more information.
 
-[go-reportcard-badge]: https://goreportcard.com/badge/github.com/hf/nitrite
-[go-reportcard]: https://goreportcard.com/report/github.com/hf/nitrite
-[pkg.go.dev-badge]: https://pkg.go.dev/badge/github.com/hf/nitrite.svg
-[pkg.go.dev]: https://pkg.go.dev/github.com/hf/nitrite
+[go-reportcard-badge]: https://goreportcard.com/badge/github.com/blocky/nitrite
+[go-reportcard]: https://goreportcard.com/report/github.com/blocky/nitrite
+[pkg.go.dev-badge]: https://pkg.go.dev/badge/github.com/blocky/nitrite.svg
+[pkg.go.dev]: https://pkg.go.dev/github.com/blocky/nitrite
 
 [aws-nitro-enclaves]: https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave.html
 [aws-nitro-attestation]: https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html
