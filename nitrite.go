@@ -384,12 +384,12 @@ func ExtractCertificates(
 	intermediates := x509.NewCertPool()
 	if !options.AllowSelfSignedCert {
 		for _, item := range doc.CABundle {
-			cert, err := x509.ParseCertificate(item)
+			cert1, err := x509.ParseCertificate(item)
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			intermediates.AddCert(cert)
-			certificates = append(certificates, cert)
+			intermediates.AddCert(cert1)
+			certificates = append(certificates, cert1)
 		}
 	}
 	return cert, certificates, intermediates, nil
