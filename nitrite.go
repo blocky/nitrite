@@ -193,11 +193,11 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, err
 	}
 
-	certificates, intermediates, err := ExtractCertificates(doc, options)
+	cert, certificates, intermediates, err := ExtractCertificates(doc, options)
 	if err != nil {
 		return nil, err
 	}
-	err = VerifyCertificates(certificates, intermediates, options)
+	err = VerifyCertificates(cert, certificates, intermediates, options)
 	if err != nil {
 		return nil, err
 	}
@@ -359,18 +359,18 @@ func VerifyAttestationDoc(
 func ExtractCertificates(
 	doc Document,
 	options VerifyOptions,
-) ([]*x509.Certificate, *x509.CertPool, error) {
+) (*x509.Certificate, []*x509.Certificate, *x509.CertPool, error) {
 	cert, err := x509.ParseCertificate(doc.Certificate)
-	if nil != err {
-		return nil, nil, err
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	if cert.PublicKeyAlgorithm != x509.ECDSA {
-		return nil, nil, ErrBadCertificatePublicKeyAlgorithm
+		return nil, nil, nil, ErrBadCertificatePublicKeyAlgorithm
 	}
 
 	if cert.SignatureAlgorithm != x509.ECDSAWithSHA384 {
-		return nil, nil, ErrBadCertificateSigningAlgorithm
+		return nil, nil, nil, ErrBadCertificateSigningAlgorithm
 	}
 
 	var certificates []*x509.Certificate
@@ -385,22 +385,23 @@ func ExtractCertificates(
 	if !options.AllowSelfSignedCert {
 		for _, item := range doc.CABundle {
 			cert, err := x509.ParseCertificate(item)
-			if nil != err {
-				return nil, nil, err
+			if err != nil {
+				return nil, nil, nil, err
 			}
 			intermediates.AddCert(cert)
 			certificates = append(certificates, cert)
 		}
 	}
-	return certificates, intermediates, nil
+	return cert, certificates, intermediates, nil
 }
 
 func VerifyCertificates(
+	cert *x509.Certificate,
 	certificates []*x509.Certificate,
 	intermediates *x509.CertPool,
 	options VerifyOptions,
 ) error {
-	cert := certificates[0]
+	// cert := certificates[0]
 	roots := options.Roots
 	if roots == nil {
 		roots = defaultRoot
