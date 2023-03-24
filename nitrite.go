@@ -202,7 +202,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, err
 	}
 
-	sign1, err := VerifyCoseSign1(cose, certificates[0])
+	sign1, err := VerifyCoseSign1(cose, cert)
 	if err != nil {
 		return nil, err
 	}
