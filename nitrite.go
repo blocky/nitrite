@@ -221,90 +221,32 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, err
 	}
 
-	//var certificates []*x509.Certificate
-	//if !options.AllowSelfSignedCert {
-	//	certificates = make([]*x509.Certificate, 0, len(doc.CABundle)+1)
-	//} else {
-	//	certificates = make([]*x509.Certificate, 1)
-	//}
-	//
-	//cert, err := x509.ParseCertificate(doc.Certificate)
-	//if nil != err {
-	//	return nil, err
-	//}
-	//
-	//if x509.ECDSA != cert.PublicKeyAlgorithm {
-	//	return nil, ErrBadCertificatePublicKeyAlgorithm
-	//}
-	//
-	//if x509.ECDSAWithSHA384 != cert.SignatureAlgorithm {
-	//	return nil, ErrBadCertificateSigningAlgorithm
-	//}
-	//
-	//certificates = append(certificates, cert)
-	//
-	//intermediates := x509.NewCertPool()
-	//
-	//if !options.AllowSelfSignedCert {
-	//	for _, item := range doc.CABundle {
-	//		cert, err := x509.ParseCertificate(item)
-	//		if nil != err {
-	//			return nil, err
-	//		}
-	//
-	//		intermediates.AddCert(cert)
-	//		certificates = append(certificates, cert)
-	//	}
-	//}
-	//
-	//roots := options.Roots
-	//if nil == roots {
-	//	roots = defaultRoot
-	//}
-	//if cert.IsCA {
-	//	roots.AddCert(cert)
-	//}
-	//
-	//currentTime := options.CurrentTime
-	//if currentTime.IsZero() {
-	//	currentTime = time.Now()
-	//}
-	//
-	//_, err = cert.Verify(
-	//	x509.VerifyOptions{
-	//		Intermediates: intermediates,
-	//		Roots:         roots,
-	//		CurrentTime:   currentTime,
-	//		KeyUsages: []x509.ExtKeyUsage{
-	//			x509.ExtKeyUsageAny,
-	//		},
-	//	},
-	//)
-	//if err != nil {
-	//	return nil, err
-	//}
-
-	coseSig := coseSignature{
-		Context:     "Signature1",
-		Protected:   cose.Protected,
-		ExternalAAD: []byte{},
-		Payload:     cose.Payload,
-	}
-
-	sigStruct, err := cbor.Marshal(&coseSig)
+	sign1, err := VerifyCoseSign1(cose, cert)
 	if err != nil {
-		return nil, ErrMarshallingCoseSignature
+		return nil, err
 	}
 
-	signatureOk := checkECDSASignature(
-		cert.PublicKey.(*ecdsa.PublicKey),
-		sigStruct,
-		cose.Signature,
-	)
-
-	if !signatureOk && nil == err {
-		err = ErrBadSignature
-	}
+	//coseSig := coseSignature{
+	//	Context:     "Signature1",
+	//	Protected:   cose.Protected,
+	//	ExternalAAD: []byte{},
+	//	Payload:     cose.Payload,
+	//}
+	//
+	//sigStruct, err := cbor.Marshal(&coseSig)
+	//if err != nil {
+	//	return nil, ErrMarshallingCoseSignature
+	//}
+	//
+	//signatureOk := checkECDSASignature(
+	//	cert.PublicKey.(*ecdsa.PublicKey),
+	//	sigStruct,
+	//	cose.Signature,
+	//)
+	//
+	//if !signatureOk && nil == err {
+	//	err = ErrBadSignature
+	//}
 
 	return &Result{
 		Document:     &doc,
@@ -313,8 +255,10 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		Unprotected:  cose.Unprotected,
 		Payload:      cose.Payload,
 		Signature:    cose.Signature,
-		SignatureOK:  signatureOk,
-		COSESign1:    sigStruct,
+		SignatureOK:  true,
+		COSESign1:    sign1,
+		//SignatureOK:  signatureOk,
+		//COSESign1:    sigStruct,
 	}, err
 }
 
@@ -530,7 +474,34 @@ func VerifyCertificates(
 	return nil
 }
 
-func checkECDSASignature(
+func VerifyCoseSign1(
+	cose CosePayload,
+	cert *x509.Certificate,
+) ([]byte, error) {
+	coseSig := coseSignature{
+		Context:     "Signature1",
+		Protected:   cose.Protected,
+		ExternalAAD: []byte{},
+		Payload:     cose.Payload,
+	}
+
+	sigStruct, err := cbor.Marshal(&coseSig)
+	if err != nil {
+		return nil, ErrMarshallingCoseSignature
+	}
+
+	signatureOk := CheckECDSASignature(
+		cert.PublicKey.(*ecdsa.PublicKey),
+		sigStruct,
+		cose.Signature,
+	)
+	if !signatureOk {
+		return nil, ErrBadSignature
+	}
+	return sigStruct, nil
+}
+
+func CheckECDSASignature(
 	publicKey *ecdsa.PublicKey,
 	sigStruct, signature []byte,
 ) bool {
