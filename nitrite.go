@@ -194,37 +194,13 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, err
 	}
 
-	header := CoseHeader{}
-	err = cbor.Unmarshal(cose.Protected, &header)
-	if nil != err {
-		return nil, ErrBadCOSESign1Structure
+	header, err := ExtractCoseHeader(cose)
+	if err != nil {
+		return nil, err
 	}
-
-	intAlg, ok := header.AlgorithmInt()
-
-	// https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
-	if ok {
-		switch intAlg {
-		case -35:
-			// do nothing -- OK
-
-		default:
-			return nil, ErrCOSESign1BadAlgorithm
-		}
-	} else {
-		strAlg, ok := header.AlgorithmString()
-
-		if ok {
-			switch strAlg {
-			case "ES384":
-				// do nothing -- OK
-
-			default:
-				return nil, ErrCOSESign1BadAlgorithm
-			}
-		} else {
-			return nil, ErrCOSESign1BadAlgorithm
-		}
+	err = VerifyCoseHeader(header)
+	if err != nil {
+		return nil, err
 	}
 
 	doc := Document{}
@@ -413,6 +389,41 @@ func VerifyCosePayload(
 		return ErrCOSESign1EmptySignatureSection
 	}
 	return nil
+}
+
+func ExtractCoseHeader(
+	cose CosePayload,
+) (CoseHeader, error) {
+	header := CoseHeader{}
+	err := cbor.Unmarshal(cose.Protected, &header)
+	if nil != err {
+		return CoseHeader{}, ErrBadCOSESign1Structure
+	}
+	return header, nil
+}
+
+func VerifyCoseHeader(
+	header CoseHeader,
+) error {
+	// https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
+	switch header.Alg.(type) {
+	case int64:
+		switch header.Alg.(int64) {
+		case -35: // Number for ES384 - OK
+			return nil
+		default:
+			return ErrCOSESign1BadAlgorithm
+		}
+	case string:
+		switch header.Alg.(string) {
+		case "ES384": // OK
+			return nil
+		default:
+			return ErrCOSESign1BadAlgorithm
+		}
+	default:
+		return ErrCOSESign1BadAlgorithm
+	}
 }
 
 func checkECDSASignature(
