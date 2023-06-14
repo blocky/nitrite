@@ -136,24 +136,6 @@ type CoseHeader struct {
 	Alg interface{} `cbor:"1,keyasint,omitempty" json:"alg,omitempty"`
 }
 
-func (h *CoseHeader) AlgorithmString() (string, bool) {
-	switch h.Alg.(type) {
-	case string:
-		return h.Alg.(string), true
-	}
-
-	return "", false
-}
-
-func (h *CoseHeader) AlgorithmInt() (int64, bool) {
-	switch h.Alg.(type) {
-	case int64:
-		return h.Alg.(int64), true
-	}
-
-	return 0, false
-}
-
 type CosePayload struct {
 	_ struct{} `cbor:",toarray"`
 
@@ -172,6 +154,22 @@ type coseSignature struct {
 	Payload     []byte
 }
 
+func (h *CoseHeader) AlgorithmString() (string, bool) {
+	switch h.Alg.(type) {
+	case string:
+		return h.Alg.(string), true
+	}
+	return "", false
+}
+
+func (h *CoseHeader) AlgorithmInt() (int64, bool) {
+	switch h.Alg.(type) {
+	case int64:
+		return h.Alg.(int64), true
+	}
+	return 0, false
+}
+
 // Verify verifies the attestation payload from `data` with the provided
 // verification options. If the options specify `Roots` as `nil`, the
 // `DefaultCARoot` will be used. If you do not specify `CurrentTime`,
@@ -187,23 +185,13 @@ type coseSignature struct {
 // set! You can use the SignatureOK field from the result to distinguish
 // errors.
 func Verify(data []byte, options VerifyOptions) (*Result, error) {
-	cose := CosePayload{}
-
-	err := cbor.Unmarshal(data, &cose)
-	if nil != err {
-		return nil, ErrBadCOSESign1Structure
+	cose, err := ExtractCosePayload(data)
+	if err != nil {
+		return nil, err
 	}
-
-	if nil == cose.Protected || 0 == len(cose.Protected) {
-		return nil, ErrCOSESign1EmptyProtectedSection
-	}
-
-	if nil == cose.Payload || 0 == len(cose.Payload) {
-		return nil, ErrCOSESign1EmptyPayloadSection
-	}
-
-	if nil == cose.Signature || 0 == len(cose.Signature) {
-		return nil, ErrCOSESign1EmptySignatureSection
+	err = VerifyCosePayload(cose)
+	if err != nil {
+		return nil, err
 	}
 
 	header := CoseHeader{}
@@ -397,6 +385,34 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		SignatureOK:  signatureOk,
 		COSESign1:    sigStruct,
 	}, err
+}
+
+func ExtractCosePayload(
+	data []byte,
+) (CosePayload, error) {
+	cose := CosePayload{}
+	err := cbor.Unmarshal(data, &cose)
+	if nil != err {
+		return CosePayload{}, ErrBadCOSESign1Structure
+	}
+	return cose, nil
+}
+
+func VerifyCosePayload(
+	cose CosePayload,
+) error {
+	if cose.Protected == nil || len(cose.Protected) == 0 {
+		return ErrCOSESign1EmptyProtectedSection
+	}
+
+	if cose.Payload == nil || len(cose.Payload) == 0 {
+		return ErrCOSESign1EmptyPayloadSection
+	}
+
+	if cose.Signature == nil || len(cose.Signature) == 0 {
+		return ErrCOSESign1EmptySignatureSection
+	}
+	return nil
 }
 
 func checkECDSASignature(
