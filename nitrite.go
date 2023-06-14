@@ -6,13 +6,81 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"math/big"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
 )
+
+type NitriteError string
+
+func (n NitriteError) Error() string { return string(n) }
+
+const (
+	ErrBadCOSESign1Structure          = NitriteError("Data is not a COSESign1 array")
+	ErrCOSESign1EmptyProtectedSection = NitriteError("COSESign1 protected section is nil or empty")
+	ErrCOSESign1EmptyPayloadSection   = NitriteError("COSESign1 payload section is nil or empty")
+	ErrCOSESign1EmptySignatureSection = NitriteError("COSESign1 signature section is nil or empty")
+	ErrCOSESign1BadAlgorithm          = NitriteError("COSESign1 algorithm not ECDSA384")
+
+	ErrBadAttestationDocument           = NitriteError("Bad attestation document")
+	ErrMandatoryFieldsMissing           = NitriteError("One or more of mandatory fields missing")
+	ErrBadDigest                        = NitriteError("Payload 'digest' is not SHA384")
+	ErrBadTimestamp                     = NitriteError("Payload 'timestamp' is 0 or less")
+	ErrBadPCRs                          = NitriteError("Payload 'pcrs' is less than 1 or more than 32")
+	ErrBadPCRIndex                      = NitriteError("Payload 'pcrs' key index is not in [0, 32)")
+	ErrBadPCRValue                      = NitriteError("Payload 'pcrs' value is nil or not of length {32,48,64}")
+	ErrBadCABundle                      = NitriteError("Payload 'cabundle' has 0 elements")
+	ErrBadCABundleItem                  = NitriteError("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
+	ErrBadPublicKey                     = NitriteError("Payload 'public_key' length greater than maxPublicKeyLen")
+	ErrBadUserData                      = NitriteError("Payload 'user_data' length greater than maxUserDataLen")
+	ErrBadNonce                         = NitriteError("Payload 'nonce' length greater than maxNonceLen")
+	ErrBadCertificatePublicKeyAlgorithm = NitriteError("Payload 'certificate' has a bad public key algorithm (not ECDSA)")
+	ErrBadCertificateSigningAlgorithm   = NitriteError("Payload 'certificate' has a bad public key signing algorithm (not ECDSAWithSHA384)")
+	ErrBadSignature                     = NitriteError("Payload's signature does not match signature from certificate")
+	ErrMarshallingCoseSignature         = NitriteError("Could not marshal COSE signature")
+)
+
+// Size of these fields (in bytes) comes from AWS Nitro documentation at
+// https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
+// from May 4, 2022.
+// With maxNonceLen = 1024, maxUserDataLen = 1024, and maxPublicKeyLen = 1024
+// the total AttestationLen = 6591.
+// An experiment on August 8, 2022, allowed user data to be maximized to
+// maxUserDataLen = 3868 with maxNonceLen = 40 and maxPublicKeyLen = 1024 for
+// the total AttestationLen = 8451.
+const (
+	maxNonceLen       = 1024
+	maxUserDataLen    = 2048
+	maxPublicKeyLen   = 1024
+	MaxAttestationLen = 6591
+)
+
+const (
+	// DefaultCARoots contains the PEM encoded roots for verifying Nitro
+	// Enclave attestation signatures. You can download them from
+	// https://aws-nitro-enclaves.amazonaws.com/AWS_NitroEnclaves_Root-G1.zip
+	// It's recommended you calculate the SHA256 sum of this string and match
+	// it to the one supplied in the AWS documentation
+	// https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html
+	DefaultCARoots string = "-----BEGIN CERTIFICATE-----\nMIICETCCAZagAwIBAgIRAPkxdWgbkK/hHUbMtOTn+FYwCgYIKoZIzj0EAwMwSTEL\nMAkGA1UEBhMCVVMxDzANBgNVBAoMBkFtYXpvbjEMMAoGA1UECwwDQVdTMRswGQYD\nVQQDDBJhd3Mubml0cm8tZW5jbGF2ZXMwHhcNMTkxMDI4MTMyODA1WhcNNDkxMDI4\nMTQyODA1WjBJMQswCQYDVQQGEwJVUzEPMA0GA1UECgwGQW1hem9uMQwwCgYDVQQL\nDANBV1MxGzAZBgNVBAMMEmF3cy5uaXRyby1lbmNsYXZlczB2MBAGByqGSM49AgEG\nBSuBBAAiA2IABPwCVOumCMHzaHDimtqQvkY4MpJzbolL//Zy2YlES1BR5TSksfbb\n48C8WBoyt7F2Bw7eEtaaP+ohG2bnUs990d0JX28TcPQXCEPZ3BABIeTPYwEoCWZE\nh8l5YoQwTcU/9KNCMEAwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUkCW1DdkF\nR+eWw5b6cp3PmanfS5YwDgYDVR0PAQH/BAQDAgGGMAoGCCqGSM49BAMDA2kAMGYC\nMQCjfy+Rocm9Xue4YnwWmNJVA44fA0P5W2OpYow9OYCVRaEevL8uO1XYru5xtMPW\nrfMCMQCi85sWBbJwKKXdS6BptQFuZbT73o/gBh1qUxl/nNr12UO8Yfwr6wPLb+6N\nIwLz3/Y=\n-----END CERTIFICATE-----\n"
+)
+
+var (
+	defaultRoot *x509.CertPool = createAWSNitroRoot()
+)
+
+func createAWSNitroRoot() *x509.CertPool {
+	pool := x509.NewCertPool()
+
+	ok := pool.AppendCertsFromPEM([]byte(DefaultCARoots))
+	if !ok {
+		return nil
+	}
+
+	return pool
+}
 
 // Document represents the AWS Nitro Enclave Attestation Document.
 type Document struct {
@@ -102,84 +170,6 @@ type coseSignature struct {
 	Protected   []byte
 	ExternalAAD []byte
 	Payload     []byte
-}
-
-// Size of these fields (in bytes) comes from AWS Nitro documentation at
-// https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
-// from May 4, 2022.
-// With maxNonceLen = 1024, maxUserDataLen = 1024, and maxPublicKeyLen = 1024
-// the total AttestationLen = 6591.
-// An experiment on August 8, 2022, allowed user data to be maximized to
-// maxUserDataLen = 3868 with maxNonceLen = 40 and maxPublicKeyLen = 1024 for
-// the total AttestationLen = 8451.
-const (
-	maxNonceLen       = 1024
-	maxUserDataLen    = 2048
-	maxPublicKeyLen   = 1024
-	MaxAttestationLen = 6591
-)
-
-// Errors that are encountered when manipulating the COSESign1 structure.
-var (
-	ErrBadCOSESign1Structure          error = errors.New("Data is not a COSESign1 array")
-	ErrCOSESign1EmptyProtectedSection error = errors.New("COSESign1 protected section is nil or empty")
-	ErrCOSESign1EmptyPayloadSection   error = errors.New("COSESign1 payload section is nil or empty")
-	ErrCOSESign1EmptySignatureSection error = errors.New("COSESign1 signature section is nil or empty")
-	ErrCOSESign1BadAlgorithm          error = errors.New("COSESign1 algorithm not ECDSA384")
-)
-
-// Errors encountered when parsing the CoseBytes attestation document.
-var (
-	ErrBadAttestationDocument error = errors.New("Bad attestation document")
-	ErrMandatoryFieldsMissing error = errors.New("One or more of mandatory fields missing")
-	ErrBadDigest              error = errors.New("Payload 'digest' is not SHA384")
-	ErrBadTimestamp           error = errors.New("Payload 'timestamp' is 0 or less")
-	ErrBadPCRs                error = errors.New("Payload 'pcrs' is less than 1 or more than 32")
-	ErrBadPCRIndex            error = errors.New("Payload 'pcrs' key index is not in [0, 32)")
-	ErrBadPCRValue            error = errors.New("Payload 'pcrs' value is nil or not of length {32,48,64}")
-	ErrBadCABundle            error = errors.New("Payload 'cabundle' has 0 elements")
-	ErrBadCABundleItem        error = errors.New("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
-	ErrBadPublicKey           error = fmt.Errorf(
-		"Payload 'public_key' length greater than %d",
-		maxPublicKeyLen,
-	)
-	ErrBadUserData error = fmt.Errorf(
-		"Payload 'user_data' length greater than %d",
-		maxUserDataLen,
-	)
-	ErrBadNonce error = fmt.Errorf(
-		"Payload 'nonce' length greater than %d",
-		maxNonceLen,
-	)
-	ErrBadCertificatePublicKeyAlgorithm error = errors.New("Payload 'certificate' has a bad public key algorithm (not ECDSA)")
-	ErrBadCertificateSigningAlgorithm   error = errors.New("Payload 'certificate' has a bad public key signing algorithm (not ECDSAWithSHA384)")
-	ErrBadSignature                     error = errors.New("Payload's signature does not match signature from certificate")
-	ErrMarshallingCoseSignature         error = errors.New("Could not marshal COSE signature")
-)
-
-const (
-	// DefaultCARoots contains the PEM encoded roots for verifying Nitro
-	// Enclave attestation signatures. You can download them from
-	// https://aws-nitro-enclaves.amazonaws.com/AWS_NitroEnclaves_Root-G1.zip
-	// It's recommended you calculate the SHA256 sum of this string and match
-	// it to the one supplied in the AWS documentation
-	// https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html
-	DefaultCARoots string = "-----BEGIN CERTIFICATE-----\nMIICETCCAZagAwIBAgIRAPkxdWgbkK/hHUbMtOTn+FYwCgYIKoZIzj0EAwMwSTEL\nMAkGA1UEBhMCVVMxDzANBgNVBAoMBkFtYXpvbjEMMAoGA1UECwwDQVdTMRswGQYD\nVQQDDBJhd3Mubml0cm8tZW5jbGF2ZXMwHhcNMTkxMDI4MTMyODA1WhcNNDkxMDI4\nMTQyODA1WjBJMQswCQYDVQQGEwJVUzEPMA0GA1UECgwGQW1hem9uMQwwCgYDVQQL\nDANBV1MxGzAZBgNVBAMMEmF3cy5uaXRyby1lbmNsYXZlczB2MBAGByqGSM49AgEG\nBSuBBAAiA2IABPwCVOumCMHzaHDimtqQvkY4MpJzbolL//Zy2YlES1BR5TSksfbb\n48C8WBoyt7F2Bw7eEtaaP+ohG2bnUs990d0JX28TcPQXCEPZ3BABIeTPYwEoCWZE\nh8l5YoQwTcU/9KNCMEAwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUkCW1DdkF\nR+eWw5b6cp3PmanfS5YwDgYDVR0PAQH/BAQDAgGGMAoGCCqGSM49BAMDA2kAMGYC\nMQCjfy+Rocm9Xue4YnwWmNJVA44fA0P5W2OpYow9OYCVRaEevL8uO1XYru5xtMPW\nrfMCMQCi85sWBbJwKKXdS6BptQFuZbT73o/gBh1qUxl/nNr12UO8Yfwr6wPLb+6N\nIwLz3/Y=\n-----END CERTIFICATE-----\n"
-)
-
-var (
-	defaultRoot *x509.CertPool = createAWSNitroRoot()
-)
-
-func createAWSNitroRoot() *x509.CertPool {
-	pool := x509.NewCertPool()
-
-	ok := pool.AppendCertsFromPEM([]byte(DefaultCARoots))
-	if !ok {
-		return nil
-	}
-
-	return pool
 }
 
 // Verify verifies the attestation payload from `data` with the provided
