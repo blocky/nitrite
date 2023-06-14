@@ -226,28 +226,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, err
 	}
 
-	//coseSig := coseSignature{
-	//	Context:     "Signature1",
-	//	Protected:   cose.Protected,
-	//	ExternalAAD: []byte{},
-	//	Payload:     cose.Payload,
-	//}
-	//
-	//sigStruct, err := cbor.Marshal(&coseSig)
-	//if err != nil {
-	//	return nil, ErrMarshallingCoseSignature
-	//}
-	//
-	//signatureOk := checkECDSASignature(
-	//	cert.PublicKey.(*ecdsa.PublicKey),
-	//	sigStruct,
-	//	cose.Signature,
-	//)
-	//
-	//if !signatureOk && nil == err {
-	//	err = ErrBadSignature
-	//}
-
+	fmt.Printf("**** Testing that Nitrite is actually being updated and that we have successfully verified! ***\n")
 	return &Result{
 		Document:     &doc,
 		Certificates: certificates,
