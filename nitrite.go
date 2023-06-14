@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/x509"
-	"fmt"
 	"math/big"
 	"time"
 
@@ -216,7 +215,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = VerifyCertificates(cert, certificates, intermediates, options)
+	err = VerifyCertificates(cert, intermediates, options)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +225,6 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, err
 	}
 
-	fmt.Printf("**** Testing that Nitrite is actually being updated and that we have successfully verified! ***\n")
 	return &Result{
 		Document:     &doc,
 		Certificates: certificates,
@@ -236,8 +234,6 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		Signature:    cose.Signature,
 		SignatureOK:  true,
 		COSESign1:    sign1,
-		//SignatureOK:  signatureOk,
-		//COSESign1:    sigStruct,
 	}, err
 }
 
@@ -324,15 +320,12 @@ func VerifyAttestationDoc(
 		doc.Certificate == nil {
 		return ErrMandatoryFieldsMissing
 	}
-
 	if doc.Digest != "SHA384" {
 		return ErrBadDigest
 	}
-
 	if doc.Timestamp < 1 {
 		return ErrBadTimestamp
 	}
-
 	if len(doc.PCRs) < 1 || len(doc.PCRs) > 32 {
 		return ErrBadPCRs
 	}
@@ -341,11 +334,9 @@ func VerifyAttestationDoc(
 		if i > 31 {
 			return ErrBadPCRIndex
 		}
-
 		if pcr == nil {
 			return ErrBadPCRValue
 		}
-
 		pcrLen := len(pcr)
 		if !(pcrLen == 32 || pcrLen == 48 || pcrLen == 64) {
 			return ErrBadPCRValue
@@ -390,7 +381,6 @@ func ExtractCertificates(
 	if cert.PublicKeyAlgorithm != x509.ECDSA {
 		return nil, nil, nil, ErrBadCertificatePublicKeyAlgorithm
 	}
-
 	if cert.SignatureAlgorithm != x509.ECDSAWithSHA384 {
 		return nil, nil, nil, ErrBadCertificateSigningAlgorithm
 	}
@@ -419,11 +409,9 @@ func ExtractCertificates(
 
 func VerifyCertificates(
 	cert *x509.Certificate,
-	certificates []*x509.Certificate,
 	intermediates *x509.CertPool,
 	options VerifyOptions,
 ) error {
-	// cert := certificates[0]
 	roots := options.Roots
 	if roots == nil {
 		roots = defaultRoot
@@ -463,7 +451,6 @@ func VerifyCoseSign1(
 		ExternalAAD: []byte{},
 		Payload:     cose.Payload,
 	}
-
 	sigStruct, err := cbor.Marshal(&coseSig)
 	if err != nil {
 		return nil, ErrMarshallingCoseSignature
@@ -485,33 +472,22 @@ func CheckECDSASignature(
 	sigStruct, signature []byte,
 ) bool {
 	// https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
-
 	var hashSigStruct []byte = nil
-
 	switch publicKey.Curve.Params().Name {
 	case "P-224":
 		h := sha256.Sum224(sigStruct)
 		hashSigStruct = h[:]
-
 	case "P-256":
 		h := sha256.Sum256(sigStruct)
 		hashSigStruct = h[:]
-
 	case "P-384":
 		h := sha512.Sum384(sigStruct)
 		hashSigStruct = h[:]
-
 	case "P-512":
 		h := sha512.Sum512(sigStruct)
 		hashSigStruct = h[:]
-
 	default:
-		panic(
-			fmt.Sprintf(
-				"unknown ECDSA curve name %v",
-				publicKey.Curve.Params().Name,
-			),
-		)
+		return false
 	}
 
 	if len(signature) != 2*len(hashSigStruct) {
@@ -520,9 +496,7 @@ func CheckECDSASignature(
 
 	r := big.NewInt(0)
 	s := big.NewInt(0)
-
 	r = r.SetBytes(signature[:len(hashSigStruct)])
 	s = s.SetBytes(signature[len(hashSigStruct):])
-
 	return ecdsa.Verify(publicKey, hashSigStruct, r, s)
 }
