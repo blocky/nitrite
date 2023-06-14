@@ -203,67 +203,13 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, err
 	}
 
-	doc := Document{}
-
-	err = cbor.Unmarshal(cose.Payload, &doc)
-	if nil != err {
-		return nil, ErrBadAttestationDocument
+	doc, err := ExtractAttestationDoc(cose)
+	if err != nil {
+		return nil, err
 	}
-
-	if "" == doc.ModuleID ||
-		"" == doc.Digest ||
-		0 == doc.Timestamp ||
-		nil == doc.PCRs ||
-		nil == doc.Certificate {
-		return nil, ErrMandatoryFieldsMissing
-	}
-
-	if !options.AllowSelfSignedCert && nil == doc.CABundle {
-		return nil, ErrMandatoryFieldsMissing
-	}
-
-	if "SHA384" != doc.Digest {
-		return nil, ErrBadDigest
-	}
-
-	if doc.Timestamp < 1 {
-		return nil, ErrBadTimestamp
-	}
-
-	if len(doc.PCRs) < 1 || len(doc.PCRs) > 32 {
-		return nil, ErrBadPCRs
-	}
-
-	for key, value := range doc.PCRs {
-		if key > 31 {
-			return nil, ErrBadPCRIndex
-		}
-
-		if nil == value || !(32 == len(value) || 48 == len(value) || 64 == len(value)) {
-			return nil, ErrBadPCRValue
-		}
-	}
-
-	if !options.AllowSelfSignedCert && len(doc.CABundle) < 1 {
-		return nil, ErrBadCABundle
-	}
-
-	if !options.AllowSelfSignedCert {
-		for _, item := range doc.CABundle {
-			if nil == item || len(item) < 1 || len(item) > 1024 {
-				return nil, ErrBadCABundleItem
-			}
-		}
-	}
-
-	if nil != doc.PublicKey && len(doc.PublicKey) > maxPublicKeyLen {
-		return nil, ErrBadPublicKey
-	}
-	if nil != doc.UserData && len(doc.UserData) > maxUserDataLen {
-		return nil, ErrBadUserData
-	}
-	if nil != doc.Nonce && len(doc.Nonce) > maxNonceLen {
-		return nil, ErrBadNonce
+	err = VerifyAttestationDoc(doc, options)
+	if err != nil {
+		return nil, err
 	}
 
 	var certificates []*x509.Certificate
@@ -424,6 +370,80 @@ func VerifyCoseHeader(
 	default:
 		return ErrCOSESign1BadAlgorithm
 	}
+}
+
+func ExtractAttestationDoc(
+	cose CosePayload,
+) (Document, error) {
+	doc := Document{}
+	err := cbor.Unmarshal(cose.Payload, &doc)
+	if nil != err {
+		return Document{}, ErrBadAttestationDocument
+	}
+	return doc, nil
+}
+
+func VerifyAttestationDoc(
+	doc Document,
+	options VerifyOptions,
+) error {
+	if doc.ModuleID == "" ||
+		doc.PCRs == nil ||
+		doc.Certificate == nil {
+		return ErrMandatoryFieldsMissing
+	}
+
+	if doc.Digest != "SHA384" {
+		return ErrBadDigest
+	}
+
+	if doc.Timestamp < 1 {
+		return ErrBadTimestamp
+	}
+
+	if len(doc.PCRs) < 1 || len(doc.PCRs) > 32 {
+		return ErrBadPCRs
+	}
+
+	for i, pcr := range doc.PCRs {
+		if i > 31 {
+			return ErrBadPCRIndex
+		}
+
+		if pcr == nil {
+			return ErrBadPCRValue
+		}
+
+		pcrLen := len(pcr)
+		if !(pcrLen == 32 || pcrLen == 48 || pcrLen == 64) {
+			return ErrBadPCRValue
+		}
+	}
+
+	if doc.PublicKey != nil && len(doc.PublicKey) > maxPublicKeyLen {
+		return ErrBadPublicKey
+	}
+	if doc.UserData != nil && len(doc.UserData) > maxUserDataLen {
+		return ErrBadUserData
+	}
+	if doc.Nonce != nil && len(doc.Nonce) > maxNonceLen {
+		return ErrBadNonce
+	}
+
+	if !options.AllowSelfSignedCert {
+		if doc.CABundle == nil {
+			return ErrMandatoryFieldsMissing
+		}
+		if len(doc.CABundle) < 1 {
+			return ErrBadCABundle
+		}
+		for _, item := range doc.CABundle {
+			if item == nil || len(item) < 1 || len(item) > 1024 {
+				return ErrBadCABundleItem
+			}
+		}
+	}
+	return nil
 }
 
 func checkECDSASignature(
