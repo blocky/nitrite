@@ -72,12 +72,10 @@ var (
 
 func createAWSNitroRoot() *x509.CertPool {
 	pool := x509.NewCertPool()
-
 	ok := pool.AppendCertsFromPEM([]byte(DefaultCARoots))
 	if !ok {
 		return nil
 	}
-
 	return pool
 }
 
@@ -89,10 +87,9 @@ type Document struct {
 	PCRs        map[uint][]byte `cbor:"pcrs" json:"pcrs"`
 	Certificate []byte          `cbor:"certificate" json:"certificate"`
 	CABundle    [][]byte        `cbor:"cabundle" json:"cabundle"`
-
-	PublicKey []byte `cbor:"public_key" json:"public_key,omitempty"`
-	UserData  []byte `cbor:"user_data" json:"user_data,omitempty"`
-	Nonce     []byte `cbor:"nonce" json:"nonce,omitempty"`
+	PublicKey   []byte          `cbor:"public_key" json:"public_key,omitempty"`
+	UserData    []byte          `cbor:"user_data" json:"user_data,omitempty"`
+	Nonce       []byte          `cbor:"nonce" json:"nonce,omitempty"`
 }
 
 // Result is a successful verification result of an attestation payload.
@@ -136,8 +133,7 @@ type CoseHeader struct {
 }
 
 type CosePayload struct {
-	_ struct{} `cbor:",toarray"`
-
+	_           struct{} `cbor:",toarray"`
 	Protected   []byte
 	Unprotected cbor.RawMessage
 	Payload     []byte
@@ -145,8 +141,7 @@ type CosePayload struct {
 }
 
 type coseSignature struct {
-	_ struct{} `cbor:",toarray"`
-
+	_           struct{} `cbor:",toarray"`
 	Context     string
 	Protected   []byte
 	ExternalAAD []byte
