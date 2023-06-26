@@ -2,100 +2,17 @@
 package nitrite
 
 import (
-	"crypto/ecdsa"
-	"crypto/sha256"
-	"crypto/sha512"
 	"crypto/x509"
-	"math/big"
 	"time"
 
-	"github.com/fxamacker/cbor/v2"
+	"github.com/blocky/nitrite/internal/attestation"
+	"github.com/blocky/nitrite/internal/cose"
 )
-
-type NitriteError string
-
-func (n NitriteError) Error() string { return string(n) }
-
-const (
-	ErrBadCOSESign1Structure          = NitriteError("Data is not a COSESign1 array")
-	ErrCOSESign1EmptyProtectedSection = NitriteError("COSESign1 protected section is nil or empty")
-	ErrCOSESign1EmptyPayloadSection   = NitriteError("COSESign1 payload section is nil or empty")
-	ErrCOSESign1EmptySignatureSection = NitriteError("COSESign1 signature section is nil or empty")
-	ErrCOSESign1BadAlgorithm          = NitriteError("COSESign1 algorithm not ECDSA384")
-
-	ErrBadAttestationDocument           = NitriteError("Bad attestation document")
-	ErrMandatoryFieldsMissing           = NitriteError("One or more of mandatory fields missing")
-	ErrBadDigest                        = NitriteError("Payload 'digest' is not SHA384")
-	ErrBadTimestamp                     = NitriteError("Payload 'timestamp' is 0 or less")
-	ErrBadPCRs                          = NitriteError("Payload 'pcrs' is less than 1 or more than 32")
-	ErrBadPCRIndex                      = NitriteError("Payload 'pcrs' key index is not in [0, 32)")
-	ErrBadPCRValue                      = NitriteError("Payload 'pcrs' value is nil or not of length {32,48,64}")
-	ErrBadCABundle                      = NitriteError("Payload 'cabundle' has 0 elements")
-	ErrBadCABundleItem                  = NitriteError("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
-	ErrBadPublicKey                     = NitriteError("Payload 'public_key' length greater than maxPublicKeyLen")
-	ErrBadUserData                      = NitriteError("Payload 'user_data' length greater than maxUserDataLen")
-	ErrBadNonce                         = NitriteError("Payload 'nonce' length greater than maxNonceLen")
-	ErrBadCertificatePublicKeyAlgorithm = NitriteError("Payload 'certificate' has a bad public key algorithm (not ECDSA)")
-	ErrBadCertificateSigningAlgorithm   = NitriteError("Payload 'certificate' has a bad public key signing algorithm (not ECDSAWithSHA384)")
-	ErrBadSignature                     = NitriteError("Payload's signature does not match signature from certificate")
-	ErrMarshallingCoseSignature         = NitriteError("Could not marshal COSE signature")
-)
-
-// Size of these fields (in bytes) comes from AWS Nitro documentation at
-// https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
-// from May 4, 2022.
-// With maxNonceLen = 1024, maxUserDataLen = 1024, and maxPublicKeyLen = 1024
-// the total AttestationLen = 6591.
-// An experiment on August 8, 2022, allowed user data to be maximized to
-// maxUserDataLen = 3868 with maxNonceLen = 40 and maxPublicKeyLen = 1024 for
-// the total AttestationLen = 8451.
-const (
-	maxNonceLen       = 1024
-	maxUserDataLen    = 2048
-	maxPublicKeyLen   = 1024
-	MaxAttestationLen = 6591
-)
-
-const (
-	// DefaultCARoots contains the PEM encoded roots for verifying Nitro
-	// Enclave attestation signatures. You can download them from
-	// https://aws-nitro-enclaves.amazonaws.com/AWS_NitroEnclaves_Root-G1.zip
-	// It's recommended you calculate the SHA256 sum of this string and match
-	// it to the one supplied in the AWS documentation
-	// https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html
-	DefaultCARoots string = "-----BEGIN CERTIFICATE-----\nMIICETCCAZagAwIBAgIRAPkxdWgbkK/hHUbMtOTn+FYwCgYIKoZIzj0EAwMwSTEL\nMAkGA1UEBhMCVVMxDzANBgNVBAoMBkFtYXpvbjEMMAoGA1UECwwDQVdTMRswGQYD\nVQQDDBJhd3Mubml0cm8tZW5jbGF2ZXMwHhcNMTkxMDI4MTMyODA1WhcNNDkxMDI4\nMTQyODA1WjBJMQswCQYDVQQGEwJVUzEPMA0GA1UECgwGQW1hem9uMQwwCgYDVQQL\nDANBV1MxGzAZBgNVBAMMEmF3cy5uaXRyby1lbmNsYXZlczB2MBAGByqGSM49AgEG\nBSuBBAAiA2IABPwCVOumCMHzaHDimtqQvkY4MpJzbolL//Zy2YlES1BR5TSksfbb\n48C8WBoyt7F2Bw7eEtaaP+ohG2bnUs990d0JX28TcPQXCEPZ3BABIeTPYwEoCWZE\nh8l5YoQwTcU/9KNCMEAwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUkCW1DdkF\nR+eWw5b6cp3PmanfS5YwDgYDVR0PAQH/BAQDAgGGMAoGCCqGSM49BAMDA2kAMGYC\nMQCjfy+Rocm9Xue4YnwWmNJVA44fA0P5W2OpYow9OYCVRaEevL8uO1XYru5xtMPW\nrfMCMQCi85sWBbJwKKXdS6BptQFuZbT73o/gBh1qUxl/nNr12UO8Yfwr6wPLb+6N\nIwLz3/Y=\n-----END CERTIFICATE-----\n"
-)
-
-var (
-	defaultRoot *x509.CertPool = createAWSNitroRoot()
-)
-
-func createAWSNitroRoot() *x509.CertPool {
-	pool := x509.NewCertPool()
-	ok := pool.AppendCertsFromPEM([]byte(DefaultCARoots))
-	if !ok {
-		return nil
-	}
-	return pool
-}
-
-// Document represents the AWS Nitro Enclave Attestation Document.
-type Document struct {
-	ModuleID    string          `cbor:"module_id" json:"module_id"`
-	Timestamp   uint64          `cbor:"timestamp" json:"timestamp"`
-	Digest      string          `cbor:"digest" json:"digest"`
-	PCRs        map[uint][]byte `cbor:"pcrs" json:"pcrs"`
-	Certificate []byte          `cbor:"certificate" json:"certificate"`
-	CABundle    [][]byte        `cbor:"cabundle" json:"cabundle"`
-	PublicKey   []byte          `cbor:"public_key" json:"public_key,omitempty"`
-	UserData    []byte          `cbor:"user_data" json:"user_data,omitempty"`
-	Nonce       []byte          `cbor:"nonce" json:"nonce,omitempty"`
-}
 
 // Result is a successful verification result of an attestation payload.
 type Result struct {
 	// Document contains the attestation document.
-	Document *Document `json:"document,omitempty"`
+	Document *attestation.Document `json:"document,omitempty"`
 
 	// Certificates contains all of the certificates except the root.
 	Certificates []*x509.Certificate `json:"certificates,omitempty"`
@@ -128,42 +45,6 @@ type VerifyOptions struct {
 	AllowSelfSignedCert bool
 }
 
-type CoseHeader struct {
-	Alg interface{} `cbor:"1,keyasint,omitempty" json:"alg,omitempty"`
-}
-
-type CosePayload struct {
-	_           struct{} `cbor:",toarray"`
-	Protected   []byte
-	Unprotected cbor.RawMessage
-	Payload     []byte
-	Signature   []byte
-}
-
-type coseSignature struct {
-	_           struct{} `cbor:",toarray"`
-	Context     string
-	Protected   []byte
-	ExternalAAD []byte
-	Payload     []byte
-}
-
-func (h *CoseHeader) AlgorithmString() (string, bool) {
-	switch h.Alg.(type) {
-	case string:
-		return h.Alg.(string), true
-	}
-	return "", false
-}
-
-func (h *CoseHeader) AlgorithmInt() (int64, bool) {
-	switch h.Alg.(type) {
-	case int64:
-		return h.Alg.(int64), true
-	}
-	return 0, false
-}
-
 // Verify verifies the attestation payload from `data` with the provided
 // verification options. If the options specify `Roots` as `nil`, the
 // `DefaultCARoot` will be used. If you do not specify `CurrentTime`,
@@ -178,44 +59,54 @@ func (h *CoseHeader) AlgorithmInt() (int64, bool) {
 // is not OK or certificate can't be verified, both Result and error will be
 // set! You can use the SignatureOK field from the result to distinguish
 // errors.
+// TODO use fuzz testing for helper functions when passing data byte arrays to see if we can generate
+// TODO unit test different paths for nitrite Verify() based on options passed in
 func Verify(data []byte, options VerifyOptions) (*Result, error) {
-	cose, err := ExtractCosePayload(data)
+	cosePayload, err := cose.ExtractCosePayload(data)
 	if err != nil {
 		return nil, err
 	}
-	err = VerifyCosePayload(cose)
-	if err != nil {
-		return nil, err
-	}
-
-	header, err := ExtractCoseHeader(cose)
-	if err != nil {
-		return nil, err
-	}
-	err = VerifyCoseHeader(header)
+	err = cose.VerifyCosePayload(cosePayload)
 	if err != nil {
 		return nil, err
 	}
 
-	doc, err := ExtractAttestationDoc(cose)
+	coseHeader, err := cose.ExtractCoseHeader(cosePayload)
 	if err != nil {
 		return nil, err
 	}
-	err = VerifyAttestationDoc(doc, options)
-	if err != nil {
-		return nil, err
-	}
-
-	cert, certificates, intermediates, err := ExtractCertificates(doc, options)
-	if err != nil {
-		return nil, err
-	}
-	err = VerifyCertificates(cert, intermediates, options)
+	err = cose.VerifyCoseHeader(coseHeader)
 	if err != nil {
 		return nil, err
 	}
 
-	sign1, err := VerifyCoseSign1(cose, cert)
+	doc, err := cose.ExtractAttestationDoc(cosePayload)
+	if err != nil {
+		return nil, err
+	}
+	err = attestation.VerifyAttestationDoc(doc, options.AllowSelfSignedCert)
+	if err != nil {
+		return nil, err
+	}
+
+	cert, certificates, intermediates, err := attestation.ExtractCertificates(
+		doc,
+		options.AllowSelfSignedCert,
+	)
+	if err != nil {
+		return nil, err
+	}
+	err = attestation.VerifyCertificates(
+		cert,
+		intermediates,
+		options.Roots,
+		options.CurrentTime,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	sign1, err := cose.VerifyCoseSign1(cosePayload, cert)
 	if err != nil {
 		return nil, err
 	}
@@ -223,275 +114,11 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 	return &Result{
 		Document:     &doc,
 		Certificates: certificates,
-		Protected:    cose.Protected,
-		Unprotected:  cose.Unprotected,
-		Payload:      cose.Payload,
-		Signature:    cose.Signature,
+		Protected:    cosePayload.Protected,
+		Unprotected:  cosePayload.Unprotected,
+		Payload:      cosePayload.Payload,
+		Signature:    cosePayload.Signature,
 		SignatureOK:  true,
 		COSESign1:    sign1,
 	}, err
-}
-
-func ExtractCosePayload(
-	data []byte,
-) (CosePayload, error) {
-	cose := CosePayload{}
-	err := cbor.Unmarshal(data, &cose)
-	if nil != err {
-		return CosePayload{}, ErrBadCOSESign1Structure
-	}
-	return cose, nil
-}
-
-func VerifyCosePayload(
-	cose CosePayload,
-) error {
-	if cose.Protected == nil || len(cose.Protected) == 0 {
-		return ErrCOSESign1EmptyProtectedSection
-	}
-
-	if cose.Payload == nil || len(cose.Payload) == 0 {
-		return ErrCOSESign1EmptyPayloadSection
-	}
-
-	if cose.Signature == nil || len(cose.Signature) == 0 {
-		return ErrCOSESign1EmptySignatureSection
-	}
-	return nil
-}
-
-func ExtractCoseHeader(
-	cose CosePayload,
-) (CoseHeader, error) {
-	header := CoseHeader{}
-	err := cbor.Unmarshal(cose.Protected, &header)
-	if nil != err {
-		return CoseHeader{}, ErrBadCOSESign1Structure
-	}
-	return header, nil
-}
-
-func VerifyCoseHeader(
-	header CoseHeader,
-) error {
-	// https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
-	switch header.Alg.(type) {
-	case int64:
-		switch header.Alg.(int64) {
-		case -35: // Number for ES384 - OK
-			return nil
-		default:
-			return ErrCOSESign1BadAlgorithm
-		}
-	case string:
-		switch header.Alg.(string) {
-		case "ES384": // OK
-			return nil
-		default:
-			return ErrCOSESign1BadAlgorithm
-		}
-	default:
-		return ErrCOSESign1BadAlgorithm
-	}
-}
-
-func ExtractAttestationDoc(
-	cose CosePayload,
-) (Document, error) {
-	doc := Document{}
-	err := cbor.Unmarshal(cose.Payload, &doc)
-	if nil != err {
-		return Document{}, ErrBadAttestationDocument
-	}
-	return doc, nil
-}
-
-func VerifyAttestationDoc(
-	doc Document,
-	options VerifyOptions,
-) error {
-	if doc.ModuleID == "" ||
-		doc.PCRs == nil ||
-		doc.Certificate == nil {
-		return ErrMandatoryFieldsMissing
-	}
-	if doc.Digest != "SHA384" {
-		return ErrBadDigest
-	}
-	if doc.Timestamp < 1 {
-		return ErrBadTimestamp
-	}
-	if len(doc.PCRs) < 1 || len(doc.PCRs) > 32 {
-		return ErrBadPCRs
-	}
-
-	for i, pcr := range doc.PCRs {
-		if i > 31 {
-			return ErrBadPCRIndex
-		}
-		if pcr == nil {
-			return ErrBadPCRValue
-		}
-		pcrLen := len(pcr)
-		if !(pcrLen == 32 || pcrLen == 48 || pcrLen == 64) {
-			return ErrBadPCRValue
-		}
-	}
-
-	if doc.PublicKey != nil && len(doc.PublicKey) > maxPublicKeyLen {
-		return ErrBadPublicKey
-	}
-	if doc.UserData != nil && len(doc.UserData) > maxUserDataLen {
-		return ErrBadUserData
-	}
-	if doc.Nonce != nil && len(doc.Nonce) > maxNonceLen {
-		return ErrBadNonce
-	}
-
-	if !options.AllowSelfSignedCert {
-		if doc.CABundle == nil {
-			return ErrMandatoryFieldsMissing
-		}
-		if len(doc.CABundle) < 1 {
-			return ErrBadCABundle
-		}
-		for _, item := range doc.CABundle {
-			if item == nil || len(item) < 1 || len(item) > 1024 {
-				return ErrBadCABundleItem
-			}
-		}
-	}
-	return nil
-}
-
-func ExtractCertificates(
-	doc Document,
-	options VerifyOptions,
-) (*x509.Certificate, []*x509.Certificate, *x509.CertPool, error) {
-	cert, err := x509.ParseCertificate(doc.Certificate)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	if cert.PublicKeyAlgorithm != x509.ECDSA {
-		return nil, nil, nil, ErrBadCertificatePublicKeyAlgorithm
-	}
-	if cert.SignatureAlgorithm != x509.ECDSAWithSHA384 {
-		return nil, nil, nil, ErrBadCertificateSigningAlgorithm
-	}
-
-	var certificates []*x509.Certificate
-	if !options.AllowSelfSignedCert {
-		certificates = make([]*x509.Certificate, 0, len(doc.CABundle)+1)
-	} else {
-		certificates = make([]*x509.Certificate, 1)
-	}
-	certificates = append(certificates, cert)
-
-	intermediates := x509.NewCertPool()
-	if !options.AllowSelfSignedCert {
-		for _, item := range doc.CABundle {
-			cert1, err := x509.ParseCertificate(item)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			intermediates.AddCert(cert1)
-			certificates = append(certificates, cert1)
-		}
-	}
-	return cert, certificates, intermediates, nil
-}
-
-func VerifyCertificates(
-	cert *x509.Certificate,
-	intermediates *x509.CertPool,
-	options VerifyOptions,
-) error {
-	roots := options.Roots
-	if roots == nil {
-		roots = defaultRoot
-	}
-	if cert.IsCA {
-		roots.AddCert(cert)
-	}
-
-	currentTime := options.CurrentTime
-	if currentTime.IsZero() {
-		currentTime = time.Now()
-	}
-
-	_, err := cert.Verify(
-		x509.VerifyOptions{
-			Intermediates: intermediates,
-			Roots:         roots,
-			CurrentTime:   currentTime,
-			KeyUsages: []x509.ExtKeyUsage{
-				x509.ExtKeyUsageAny,
-			},
-		},
-	)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func VerifyCoseSign1(
-	cose CosePayload,
-	cert *x509.Certificate,
-) ([]byte, error) {
-	coseSig := coseSignature{
-		Context:     "Signature1",
-		Protected:   cose.Protected,
-		ExternalAAD: []byte{},
-		Payload:     cose.Payload,
-	}
-	sigStruct, err := cbor.Marshal(&coseSig)
-	if err != nil {
-		return nil, ErrMarshallingCoseSignature
-	}
-
-	signatureOk := CheckECDSASignature(
-		cert.PublicKey.(*ecdsa.PublicKey),
-		sigStruct,
-		cose.Signature,
-	)
-	if !signatureOk {
-		return nil, ErrBadSignature
-	}
-	return sigStruct, nil
-}
-
-func CheckECDSASignature(
-	publicKey *ecdsa.PublicKey,
-	sigStruct, signature []byte,
-) bool {
-	// https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
-	var hashSigStruct []byte = nil
-	switch publicKey.Curve.Params().Name {
-	case "P-224":
-		h := sha256.Sum224(sigStruct)
-		hashSigStruct = h[:]
-	case "P-256":
-		h := sha256.Sum256(sigStruct)
-		hashSigStruct = h[:]
-	case "P-384":
-		h := sha512.Sum384(sigStruct)
-		hashSigStruct = h[:]
-	case "P-512":
-		h := sha512.Sum512(sigStruct)
-		hashSigStruct = h[:]
-	default:
-		return false
-	}
-
-	if len(signature) != 2*len(hashSigStruct) {
-		return false
-	}
-
-	r := big.NewInt(0)
-	s := big.NewInt(0)
-	r = r.SetBytes(signature[:len(hashSigStruct)])
-	s = s.SetBytes(signature[len(hashSigStruct):])
-	return ecdsa.Verify(publicKey, hashSigStruct, r, s)
 }
