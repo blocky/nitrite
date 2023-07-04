@@ -7,7 +7,7 @@ import (
 	"crypto/x509"
 	"math/big"
 
-	"github.com/blocky/nitrite/internal/attestation"
+	"github.com/blocky/nitrite/pkg/attestation"
 	"github.com/blocky/nitrite/pkg/nitrite_error"
 	"github.com/fxamacker/cbor/v2"
 )

@@ -5,8 +5,8 @@ import (
 	"crypto/x509"
 	"time"
 
-	"github.com/blocky/nitrite/internal/attestation"
-	"github.com/blocky/nitrite/internal/cose"
+	"github.com/blocky/nitrite/pkg/attestation"
+	"github.com/blocky/nitrite/pkg/cose"
 )
 
 // Result is a successful verification result of an attestation payload.
