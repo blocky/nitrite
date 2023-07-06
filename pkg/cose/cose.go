@@ -142,7 +142,7 @@ func CheckECDSASignature(
 	sigStruct, signature []byte,
 ) bool {
 	// https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
-	var hashSigStruct []byte = nil
+	var hashSigStruct []byte
 	switch publicKey.Curve.Params().Name {
 	case "P-224":
 		h := sha256.Sum224(sigStruct)
