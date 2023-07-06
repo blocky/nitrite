@@ -8,7 +8,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/blocky/nitrite"
+	"github.com/blocky/nitrite/pkg/nitrite"
 )
 
 var (
