@@ -285,7 +285,11 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 			return nil, ErrBadPCRIndex
 		}
 
-		if nil == value || !(32 == len(value) || 48 == len(value) || 64 == len(value)) {
+		if nil == value ||
+			!(32 == len(value) ||
+				48 == len(value) ||
+				64 == len(value) ||
+				96 == len(value)) {
 			return nil, ErrBadPCRValue
 		}
 	}
