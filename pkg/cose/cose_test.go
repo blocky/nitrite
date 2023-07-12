@@ -53,32 +53,6 @@ func TestCose_ExtractCosePayload(t *testing.T) {
 	})
 }
 
-// Not sure this does much? Consider moving fuzz to greater nitrite.Verify
-func FuzzCose_ExtractCosePayload(f *testing.F) {
-	attestBytes, err := base64.StdEncoding.DecodeString(nitroStagAttestBase64)
-	require.NoError(f, err)
-
-	tests := []struct {
-		data []byte
-	}{
-		{data: attestBytes}, // happy path
-	}
-	for _, test := range tests {
-		f.Add(test.data)
-	}
-
-	f.Fuzz(func(t *testing.T, data []byte) {
-		cosePayload, err := cose.ExtractCosePayload(data)
-		assert.NoError(t, err)
-		assert.NotNil(t, cosePayload.Protected)
-		assert.NotNil(t, cosePayload.Payload)
-		assert.NotNil(t, cosePayload.Signature)
-		assert.Greater(t, len(cosePayload.Protected), 0)
-		assert.Greater(t, len(cosePayload.Payload), 0)
-		assert.Greater(t, len(cosePayload.Signature), 0)
-	})
-}
-
 func TestCose_VerifyCosePayload(t *testing.T) {
 	attestBytes, err := base64.StdEncoding.DecodeString(nitroStagAttestBase64)
 	require.NoError(t, err)
