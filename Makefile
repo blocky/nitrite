@@ -6,15 +6,16 @@ GOTIDY=$(GOMOD) tidy
 GOFMT=gofmt -s
 GOFMT_FORMAT=$(GOFMT) -w
 PKG=./pkg
+CONFIGS=./configs
 
 format:
 	@$(GOFMT_FORMAT) .
 
 lint:
-	@golangci-lint run --config ./configs/golangci.yaml
+	@golangci-lint run --config $(CONFIGS)/golangci.yaml
 
 mock:
-	@mockery --config ./configs/mockery.yaml
+	@mockery --config $(CONFIGS)/mockery.yaml
 
 mock-clean:
 	@find . -type f -name 'mock_*.go' -delete
