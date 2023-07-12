@@ -59,8 +59,6 @@ type VerifyOptions struct {
 // is not OK or certificate can't be verified, both Result and error will be
 // set! You can use the SignatureOK field from the result to distinguish
 // errors.
-// TODO use fuzz testing for helper functions when passing data byte arrays to see if we can generate
-// TODO unit test different paths for nitrite Verify() based on options passed in
 func Verify(data []byte, options VerifyOptions) (*Result, error) {
 	cosePayload, err := cose.ExtractCosePayload(data)
 	if err != nil {
