@@ -11,10 +11,10 @@ format:
 	@$(GOFMT_FORMAT) .
 
 lint:
-	@golangci-lint run --config ./config/golangci.yaml
+	@golangci-lint run --config ./configs/golangci.yaml
 
 mock:
-	@mockery --config ./config/mockery.yaml
+	@mockery --config ./configs/mockery.yaml
 
 mock-clean:
 	@find . -type f -name 'mock_*.go' -delete
