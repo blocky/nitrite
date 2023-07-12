@@ -14,7 +14,7 @@ lint:
 	@golangci-lint run --config ./config/golangci.yaml
 
 mock:
-	@mockery
+	@mockery --config ./config/mockery.yaml
 
 mock-clean:
 	@find . -type f -name 'mock_*.go' -delete
