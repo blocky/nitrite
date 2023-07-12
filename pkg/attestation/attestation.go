@@ -10,15 +10,15 @@ import (
 // Size of these fields (in bytes) comes from AWS Nitro documentation at
 // https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
 // from May 4, 2022.
-// With maxNonceLen = 1024, maxUserDataLen = 1024, and maxPublicKeyLen = 1024
+// With MaxNonceLen = 1024, MaxUserDataLen = 1024, and MaxPublicKeyLen = 1024
 // the total AttestationLen = 6591.
 // An experiment on August 8, 2022, allowed user data to be maximized to
-// maxUserDataLen = 3868 with maxNonceLen = 40 and maxPublicKeyLen = 1024 for
+// MaxUserDataLen = 3868 with MaxNonceLen = 40 and MaxPublicKeyLen = 1024 for
 // the total AttestationLen = 8451.
 const (
-	maxNonceLen       = 1024
-	maxUserDataLen    = 2048
-	maxPublicKeyLen   = 1024
+	MaxNonceLen       = 1024
+	MaxUserDataLen    = 2048
+	MaxPublicKeyLen   = 1024
 	MaxAttestationLen = 6591
 )
 
@@ -77,10 +77,7 @@ func VerifyAttestationDoc(
 		return nitrite_error.ErrBadPCRs
 	}
 
-	for i, pcr := range doc.PCRs {
-		if i > 31 {
-			return nitrite_error.ErrBadPCRIndex
-		}
+	for _, pcr := range doc.PCRs {
 		if pcr == nil {
 			return nitrite_error.ErrBadPCRValue
 		}
@@ -90,13 +87,13 @@ func VerifyAttestationDoc(
 		}
 	}
 
-	if doc.PublicKey != nil && len(doc.PublicKey) > maxPublicKeyLen {
+	if doc.PublicKey != nil && len(doc.PublicKey) > MaxPublicKeyLen {
 		return nitrite_error.ErrBadPublicKey
 	}
-	if doc.UserData != nil && len(doc.UserData) > maxUserDataLen {
+	if doc.UserData != nil && len(doc.UserData) > MaxUserDataLen {
 		return nitrite_error.ErrBadUserData
 	}
-	if doc.Nonce != nil && len(doc.Nonce) > maxNonceLen {
+	if doc.Nonce != nil && len(doc.Nonce) > MaxNonceLen {
 		return nitrite_error.ErrBadNonce
 	}
 
