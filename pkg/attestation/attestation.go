@@ -82,7 +82,7 @@ func VerifyAttestationDoc(
 			return nitrite_error.ErrBadPCRValue
 		}
 		pcrLen := len(pcr)
-		if !(pcrLen == 32 || pcrLen == 48 || pcrLen == 64) {
+		if !(pcrLen == 32 || pcrLen == 48 || pcrLen == 64 || pcrLen == 96) {
 			return nitrite_error.ErrBadPCRValue
 		}
 	}
