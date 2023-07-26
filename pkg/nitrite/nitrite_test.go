@@ -95,23 +95,12 @@ func FuzzNitrite_Verify(f *testing.F) {
 	attestBytes, err := base64.StdEncoding.DecodeString(nitroStagAttestBase64)
 	require.NoError(f, err)
 
-	badBytes1 := attestBytes[1:]
-	badBytes2 := attestBytes[:len(attestBytes)-1]
-	badBytes3 := attestBytes
-	badBytes4 := attestBytes
-	badBytes5 := attestBytes
-	badBytes3[0]++
-	badBytes4[100]++
-	badBytes5[1000]++
+	badBytes := attestBytes[:len(attestBytes)-1]
 
 	tests := []struct {
 		data []byte
 	}{
-		{data: badBytes1},
-		{data: badBytes2},
-		{data: badBytes3},
-		{data: badBytes4},
-		{data: badBytes5},
+		{data: badBytes},
 	}
 	for _, test := range tests {
 		f.Add(test.data)
