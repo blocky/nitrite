@@ -9,7 +9,6 @@ import (
 
 	"github.com/blocky/nitrite/pkg/attestation"
 	"github.com/blocky/nitrite/pkg/cose"
-	"github.com/blocky/nitrite/pkg/nitrite_error"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -71,7 +70,7 @@ func TestCose_VerifyCosePayload(t *testing.T) {
 
 		cosePayload.Protected = nil
 		err = cose.VerifyCosePayload(cosePayload)
-		assert.ErrorIs(t, err, nitrite_error.ErrCOSESign1EmptyProtectedSection)
+		assert.ErrorContains(t, err, cose.ErrCOSESign1EmptyProtectedSection)
 	})
 
 	t.Run("ErrCOSESign1EmptyProtectedSection length zero", func(t *testing.T) {
@@ -80,7 +79,7 @@ func TestCose_VerifyCosePayload(t *testing.T) {
 
 		cosePayload.Protected = make([]byte, 0)
 		err = cose.VerifyCosePayload(cosePayload)
-		assert.ErrorIs(t, err, nitrite_error.ErrCOSESign1EmptyProtectedSection)
+		assert.ErrorContains(t, err, cose.ErrCOSESign1EmptyProtectedSection)
 	})
 
 	t.Run("ErrCOSESign1EmptyPayloadSection nil", func(t *testing.T) {
@@ -89,7 +88,7 @@ func TestCose_VerifyCosePayload(t *testing.T) {
 
 		cosePayload.Payload = nil
 		err = cose.VerifyCosePayload(cosePayload)
-		assert.ErrorIs(t, err, nitrite_error.ErrCOSESign1EmptyPayloadSection)
+		assert.ErrorContains(t, err, cose.ErrCOSESign1EmptyPayloadSection)
 	})
 
 	t.Run("ErrCOSESign1EmptyPayloadSection length zero", func(t *testing.T) {
@@ -98,7 +97,7 @@ func TestCose_VerifyCosePayload(t *testing.T) {
 
 		cosePayload.Payload = make([]byte, 0)
 		err = cose.VerifyCosePayload(cosePayload)
-		assert.ErrorIs(t, err, nitrite_error.ErrCOSESign1EmptyPayloadSection)
+		assert.ErrorContains(t, err, cose.ErrCOSESign1EmptyPayloadSection)
 	})
 
 	t.Run("ErrCOSESign1EmptySignatureSection nil", func(t *testing.T) {
@@ -107,7 +106,7 @@ func TestCose_VerifyCosePayload(t *testing.T) {
 
 		cosePayload.Signature = nil
 		err = cose.VerifyCosePayload(cosePayload)
-		assert.ErrorIs(t, err, nitrite_error.ErrCOSESign1EmptySignatureSection)
+		assert.ErrorContains(t, err, cose.ErrCOSESign1EmptySignatureSection)
 	})
 
 	t.Run("ErrCOSESign1EmptySignatureSection length zero", func(t *testing.T) {
@@ -116,7 +115,7 @@ func TestCose_VerifyCosePayload(t *testing.T) {
 
 		cosePayload.Signature = make([]byte, 0)
 		err = cose.VerifyCosePayload(cosePayload)
-		assert.ErrorIs(t, err, nitrite_error.ErrCOSESign1EmptySignatureSection)
+		assert.ErrorContains(t, err, cose.ErrCOSESign1EmptySignatureSection)
 	})
 }
 
@@ -161,7 +160,7 @@ func TestCose_VerifyCoseHeader(t *testing.T) {
 		coseHeader.Alg = &badInt
 
 		err = cose.VerifyCoseHeader(coseHeader)
-		assert.ErrorIs(t, err, nitrite_error.ErrCOSESign1BadAlgorithm)
+		assert.ErrorContains(t, err, cose.ErrCOSESign1BadAlgorithm)
 
 	})
 
@@ -171,7 +170,7 @@ func TestCose_VerifyCoseHeader(t *testing.T) {
 		coseHeader.Alg = &badString
 
 		err = cose.VerifyCoseHeader(coseHeader)
-		assert.ErrorIs(t, err, nitrite_error.ErrCOSESign1BadAlgorithm)
+		assert.ErrorContains(t, err, cose.ErrCOSESign1BadAlgorithm)
 	})
 }
 
@@ -212,7 +211,7 @@ func TestCose_VerifyCoseSign1(t *testing.T) {
 	t.Run("ErrBadSignature", func(t *testing.T) {
 		cosePayload.Signature = nil
 		sign1, err := cose.VerifyCoseSign1(cosePayload, cert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadSignature)
+		assert.ErrorContains(t, err, cose.ErrBadSignature)
 		assert.Nil(t, sign1)
 	})
 }
@@ -238,7 +237,7 @@ func TestCose_ExtractAttestationDoc(t *testing.T) {
 	t.Run("unmarshal error", func(t *testing.T) {
 		cosePayload.Payload = []byte("bad payload")
 		doc, err := cose.ExtractAttestationDoc(cosePayload)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadAttestationDocument)
+		assert.ErrorContains(t, err, cose.ErrBadAttestationDocument)
 		assert.Empty(t, doc)
 	})
 }

@@ -5,11 +5,23 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/x509"
+	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/blocky/nitrite/pkg/attestation"
-	"github.com/blocky/nitrite/pkg/nitrite_error"
 	"github.com/fxamacker/cbor/v2"
+)
+
+const (
+	ErrBadAttestationDocument         = "Bad attestation document"
+	ErrBadCOSESign1Structure          = "Data is not a COSESign1 array"
+	ErrBadSignature                   = "Payload's signature does not match signature from certificate"
+	ErrCOSESign1EmptyProtectedSection = "COSESign1 protected section is nil or empty"
+	ErrCOSESign1EmptyPayloadSection   = "COSESign1 payload section is nil or empty"
+	ErrCOSESign1EmptySignatureSection = "COSESign1 signature section is nil or empty"
+	ErrCOSESign1BadAlgorithm          = "COSESign1 algorithm not ECDSA384"
+	ErrMarshallingCoseSignature       = "Could not marshal COSE signature"
 )
 
 type CoseHeader struct {
@@ -32,29 +44,17 @@ type CoseSignature struct {
 	Payload     []byte
 }
 
-func (h *CoseHeader) AlgorithmString() (string, bool) {
-	switch h.Alg.(type) {
-	case string:
-		return h.Alg.(string), true
-	}
-	return "", false
-}
-
-func (h *CoseHeader) AlgorithmInt() (int64, bool) {
-	switch h.Alg.(type) {
-	case int64:
-		return h.Alg.(int64), true
-	}
-	return 0, false
-}
-
 func ExtractCosePayload(
 	data []byte,
 ) (CosePayload, error) {
 	cose := CosePayload{}
 	err := cbor.Unmarshal(data, &cose)
 	if nil != err {
-		return CosePayload{}, nitrite_error.ErrBadCOSESign1Structure
+		return CosePayload{}, fmt.Errorf(
+			"%s: %w",
+			ErrBadCOSESign1Structure,
+			err,
+		)
 	}
 	return cose, nil
 }
@@ -63,15 +63,15 @@ func VerifyCosePayload(
 	cose CosePayload,
 ) error {
 	if cose.Protected == nil || len(cose.Protected) == 0 {
-		return nitrite_error.ErrCOSESign1EmptyProtectedSection
+		return errors.New(ErrCOSESign1EmptyProtectedSection)
 	}
 
 	if cose.Payload == nil || len(cose.Payload) == 0 {
-		return nitrite_error.ErrCOSESign1EmptyPayloadSection
+		return errors.New(ErrCOSESign1EmptyPayloadSection)
 	}
 
 	if cose.Signature == nil || len(cose.Signature) == 0 {
-		return nitrite_error.ErrCOSESign1EmptySignatureSection
+		return errors.New(ErrCOSESign1EmptySignatureSection)
 	}
 	return nil
 }
@@ -82,7 +82,11 @@ func ExtractCoseHeader(
 	header := CoseHeader{}
 	err := cbor.Unmarshal(cose.Protected, &header)
 	if nil != err {
-		return CoseHeader{}, nitrite_error.ErrBadCOSESign1Structure
+		return CoseHeader{}, fmt.Errorf(
+			"%s: %w",
+			ErrBadCOSESign1Structure,
+			err,
+		)
 	}
 	return header, nil
 }
@@ -97,17 +101,17 @@ func VerifyCoseHeader(
 		case -35: // Number for ES384 - OK
 			return nil
 		default:
-			return nitrite_error.ErrCOSESign1BadAlgorithm
+			return errors.New(ErrCOSESign1BadAlgorithm)
 		}
 	case string:
 		switch header.Alg.(string) {
 		case "ES384": // OK
 			return nil
 		default:
-			return nitrite_error.ErrCOSESign1BadAlgorithm
+			return errors.New(ErrCOSESign1BadAlgorithm)
 		}
 	default:
-		return nitrite_error.ErrCOSESign1BadAlgorithm
+		return errors.New(ErrCOSESign1BadAlgorithm)
 	}
 }
 
@@ -123,7 +127,11 @@ func VerifyCoseSign1(
 	}
 	sigStruct, err := cbor.Marshal(&coseSig)
 	if err != nil {
-		return nil, nitrite_error.ErrMarshallingCoseSignature
+		return nil, fmt.Errorf(
+			"%s: %w",
+			ErrMarshallingCoseSignature,
+			err,
+		)
 	}
 
 	signatureOk := CheckECDSASignature(
@@ -132,7 +140,8 @@ func VerifyCoseSign1(
 		cosePayload.Signature,
 	)
 	if !signatureOk {
-		return nil, nitrite_error.ErrBadSignature
+		return nil, errors.New(ErrBadSignature)
+
 	}
 	return sigStruct, nil
 }
@@ -177,7 +186,11 @@ func ExtractAttestationDoc(
 	doc := attestation.Document{}
 	err := cbor.Unmarshal(payload.Payload, &doc)
 	if nil != err {
-		return attestation.Document{}, nitrite_error.ErrBadAttestationDocument
+		return attestation.Document{}, fmt.Errorf(
+			"%s: %w",
+			ErrBadAttestationDocument,
+			err,
+		)
 	}
 	return doc, nil
 }
