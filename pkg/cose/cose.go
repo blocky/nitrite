@@ -148,11 +148,26 @@ func VerifyCoseSign1(
 
 func CheckECDSASignature(
 	publicKey *ecdsa.PublicKey,
-	sigStruct, signature []byte,
+	sigStruct []byte,
+	signature []byte,
+) bool {
+	return CheckECDSASignatureRaw(
+		publicKey,
+		sigStruct,
+		signature,
+		publicKey.Curve.Params().Name,
+	)
+}
+
+func CheckECDSASignatureRaw(
+	publicKey *ecdsa.PublicKey,
+	sigStruct []byte,
+	signature []byte,
+	ecdsaCurveName string,
 ) bool {
 	// https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
 	var hashSigStruct []byte
-	switch publicKey.Curve.Params().Name {
+	switch ecdsaCurveName {
 	case "P-224":
 		h := sha256.Sum224(sigStruct)
 		hashSigStruct = h[:]
@@ -162,7 +177,7 @@ func CheckECDSASignature(
 	case "P-384":
 		h := sha512.Sum384(sigStruct)
 		hashSigStruct = h[:]
-	case "P-512":
+	case "P-521":
 		h := sha512.Sum512(sigStruct)
 		hashSigStruct = h[:]
 	default:

@@ -1,6 +1,7 @@
 package cose_test
 
 import (
+	"crypto/ecdsa"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/blocky/nitrite/pkg/attestation"
 	"github.com/blocky/nitrite/pkg/cose"
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -213,6 +215,87 @@ func TestCose_VerifyCoseSign1(t *testing.T) {
 		sign1, err := cose.VerifyCoseSign1(cosePayload, cert)
 		assert.ErrorContains(t, err, cose.ErrBadSignature)
 		assert.Nil(t, sign1)
+	})
+}
+
+func TestCose_CheckECDSASignature(t *testing.T) {
+	attestBytes, err := base64.StdEncoding.DecodeString(nitroStagAttestBase64)
+	require.NoError(t, err)
+
+	cosePayload, err := cose.ExtractCosePayload(attestBytes)
+	require.NoError(t, err)
+
+	doc, err := makeAttestationDocFromJSON(
+		[]byte(nitroStagAttestDocJSON),
+	)
+	require.NoError(t, err)
+
+	allowSelfSignedCert := false
+	cert, _, intermediates, err := attestation.ExtractCertificates(
+		doc,
+		allowSelfSignedCert,
+	)
+	require.NoError(t, err)
+
+	validTime := time.Date(2023, time.July, 10, 15, 22, 53, 0, time.UTC)
+	err = attestation.VerifyCertificates(
+		cert,
+		intermediates,
+		nil,
+		validTime,
+	)
+	require.NoError(t, err)
+
+	coseSig := cose.CoseSignature{
+		Context:     "Signature1",
+		Protected:   cosePayload.Protected,
+		ExternalAAD: []byte{},
+		Payload:     cosePayload.Payload,
+	}
+	sigStruct, err := cbor.Marshal(&coseSig)
+	require.NoError(t, err)
+
+	publicKey, ok := cert.PublicKey.(*ecdsa.PublicKey)
+	require.True(t, ok)
+
+	t.Run("happy path", func(t *testing.T) {
+		ok := cose.CheckECDSASignatureRaw(
+			publicKey,
+			sigStruct,
+			cosePayload.Signature,
+			publicKey.Curve.Params().Name,
+		)
+		assert.True(t, ok)
+	})
+
+	t.Run("bad curve name", func(t *testing.T) {
+		ok := cose.CheckECDSASignatureRaw(
+			publicKey,
+			sigStruct,
+			cosePayload.Signature,
+			"bad curve name",
+		)
+		assert.False(t, ok)
+	})
+
+	t.Run("bad sigstruct", func(t *testing.T) {
+		ok := cose.CheckECDSASignatureRaw(
+			publicKey,
+			sigStruct[1:],
+			cosePayload.Signature,
+			publicKey.Curve.Params().Name,
+		)
+		assert.False(t, ok)
+	})
+
+	t.Run("bad signature", func(t *testing.T) {
+		ok := cose.CheckECDSASignatureRaw(
+			publicKey,
+			sigStruct,
+			cosePayload.Signature[1:],
+			publicKey.Curve.Params().Name,
+		)
+		assert.False(t, ok)
 	})
 }
 
