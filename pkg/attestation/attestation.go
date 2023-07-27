@@ -2,9 +2,8 @@ package attestation
 
 import (
 	"crypto/x509"
+	"errors"
 	"time"
-
-	"github.com/blocky/nitrite/pkg/nitrite_error"
 )
 
 // Size of these fields (in bytes) comes from AWS Nitro documentation at
@@ -20,6 +19,19 @@ const (
 	MaxUserDataLen    = 2048
 	MaxPublicKeyLen   = 1024
 	MaxAttestationLen = 6591
+
+	ErrMandatoryFieldsMissing           = "One or more of mandatory fields missing"
+	ErrBadDigest                        = "Payload 'digest' is not SHA384"
+	ErrBadTimestamp                     = "Payload 'timestamp' is 0 or less"
+	ErrBadPCRs                          = "Payload 'pcrs' is less than 1 or more than 32"
+	ErrBadPCRValue                      = "Payload 'pcrs' value is nil or not of length {32,48,64}"
+	ErrBadCABundle                      = "Payload 'cabundle' has 0 elements"
+	ErrBadCABundleItem                  = "Payload 'cabundle' has a nil item or of length not in [1, 1024]"
+	ErrBadPublicKey                     = "Payload 'public_key' length greater than maxPublicKeyLen"
+	ErrBadUserData                      = "Payload 'user_data' length greater than maxUserDataLen"
+	ErrBadNonce                         = "Payload 'nonce' length greater than maxNonceLen"
+	ErrBadCertificatePublicKeyAlgorithm = "Payload 'certificate' has a bad public key algorithm (not ECDSA)"
+	ErrBadCertificateSigningAlgorithm   = "Payload 'certificate' has a bad public key signing algorithm (not ECDSAWithSHA384)"
 )
 
 // Document represents the AWS Nitro Enclave Attestation Document.
@@ -65,48 +77,48 @@ func VerifyAttestationDoc(
 	if doc.ModuleID == "" ||
 		doc.PCRs == nil ||
 		doc.Certificate == nil {
-		return nitrite_error.ErrMandatoryFieldsMissing
+		return errors.New(ErrMandatoryFieldsMissing)
 	}
 	if doc.Digest != "SHA384" {
-		return nitrite_error.ErrBadDigest
+		return errors.New(ErrBadDigest)
 	}
 	if doc.Timestamp < 1 {
-		return nitrite_error.ErrBadTimestamp
+		return errors.New(ErrBadTimestamp)
 	}
 	if len(doc.PCRs) < 1 || len(doc.PCRs) > 32 {
-		return nitrite_error.ErrBadPCRs
+		return errors.New(ErrBadPCRs)
 	}
 
 	for _, pcr := range doc.PCRs {
 		if pcr == nil {
-			return nitrite_error.ErrBadPCRValue
+			return errors.New(ErrBadPCRValue)
 		}
 		pcrLen := len(pcr)
 		if !(pcrLen == 32 || pcrLen == 48 || pcrLen == 64 || pcrLen == 96) {
-			return nitrite_error.ErrBadPCRValue
+			return errors.New(ErrBadPCRValue)
 		}
 	}
 
 	if doc.PublicKey != nil && len(doc.PublicKey) > MaxPublicKeyLen {
-		return nitrite_error.ErrBadPublicKey
+		return errors.New(ErrBadPublicKey)
 	}
 	if doc.UserData != nil && len(doc.UserData) > MaxUserDataLen {
-		return nitrite_error.ErrBadUserData
+		return errors.New(ErrBadUserData)
 	}
 	if doc.Nonce != nil && len(doc.Nonce) > MaxNonceLen {
-		return nitrite_error.ErrBadNonce
+		return errors.New(ErrBadNonce)
 	}
 
 	if !allowSelfSignedCert {
 		if doc.CABundle == nil {
-			return nitrite_error.ErrMandatoryFieldsMissing
+			return errors.New(ErrMandatoryFieldsMissing)
 		}
 		if len(doc.CABundle) < 1 {
-			return nitrite_error.ErrBadCABundle
+			return errors.New(ErrBadCABundle)
 		}
 		for _, item := range doc.CABundle {
 			if item == nil || len(item) < 1 || len(item) > 1024 {
-				return nitrite_error.ErrBadCABundleItem
+				return errors.New(ErrBadCABundleItem)
 			}
 		}
 	}
@@ -123,10 +135,10 @@ func ExtractCertificates(
 	}
 
 	if cert.PublicKeyAlgorithm != x509.ECDSA {
-		return nil, nil, nil, nitrite_error.ErrBadCertificatePublicKeyAlgorithm
+		return nil, nil, nil, errors.New(ErrBadCertificatePublicKeyAlgorithm)
 	}
 	if cert.SignatureAlgorithm != x509.ECDSAWithSHA384 {
-		return nil, nil, nil, nitrite_error.ErrBadCertificateSigningAlgorithm
+		return nil, nil, nil, errors.New(ErrBadCertificateSigningAlgorithm)
 	}
 
 	var certificates []*x509.Certificate

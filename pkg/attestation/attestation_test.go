@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/blocky/nitrite/pkg/attestation"
-	"github.com/blocky/nitrite/pkg/nitrite_error"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -42,7 +41,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.ModuleID = ""
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrMandatoryFieldsMissing)
+		assert.ErrorContains(t, err, attestation.ErrMandatoryFieldsMissing)
 	})
 
 	t.Run("ErrMandatoryFieldsMissing PCRs nil", func(t *testing.T) {
@@ -51,7 +50,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.PCRs = nil
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrMandatoryFieldsMissing)
+		assert.ErrorContains(t, err, attestation.ErrMandatoryFieldsMissing)
 	})
 
 	t.Run("ErrMandatoryFieldsMissing Certificate nil", func(t *testing.T) {
@@ -60,7 +59,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.Certificate = nil
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrMandatoryFieldsMissing)
+		assert.ErrorContains(t, err, attestation.ErrMandatoryFieldsMissing)
 	})
 
 	t.Run("ErrMandatoryFieldsMissing CABundle nil", func(t *testing.T) {
@@ -69,7 +68,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.CABundle = nil
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrMandatoryFieldsMissing)
+		assert.ErrorContains(t, err, attestation.ErrMandatoryFieldsMissing)
 	})
 
 	t.Run("ErrBadDigest", func(t *testing.T) {
@@ -78,7 +77,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.Digest = "SHA256"
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadDigest)
+		assert.ErrorContains(t, err, attestation.ErrBadDigest)
 	})
 
 	t.Run("ErrBadTimestamp", func(t *testing.T) {
@@ -87,7 +86,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.Timestamp = 0
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadTimestamp)
+		assert.ErrorContains(t, err, attestation.ErrBadTimestamp)
 	})
 
 	t.Run("ErrBadPCRs < 0", func(t *testing.T) {
@@ -96,7 +95,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.PCRs = make(map[uint][]byte)
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadPCRs)
+		assert.ErrorContains(t, err, attestation.ErrBadPCRs)
 	})
 
 	t.Run("ErrBadPCRs > 32", func(t *testing.T) {
@@ -109,7 +108,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 			doc.PCRs[i] = pcr
 		}
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadPCRs)
+		assert.ErrorContains(t, err, attestation.ErrBadPCRs)
 	})
 
 	t.Run("ErrBadPCRValue nil", func(t *testing.T) {
@@ -118,7 +117,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.PCRs[0] = nil
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadPCRValue)
+		assert.ErrorContains(t, err, attestation.ErrBadPCRValue)
 	})
 
 	t.Run("ErrBadPCRValue invalid length", func(t *testing.T) {
@@ -127,7 +126,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.PCRs[0] = []byte("invalid length pcr")
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadPCRValue)
+		assert.ErrorContains(t, err, attestation.ErrBadPCRValue)
 	})
 
 	t.Run("ErrBadPublicKey", func(t *testing.T) {
@@ -136,7 +135,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.PublicKey = make([]byte, attestation.MaxPublicKeyLen+1)
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadPublicKey)
+		assert.ErrorContains(t, err, attestation.ErrBadPublicKey)
 	})
 
 	t.Run("ErrBadUserData", func(t *testing.T) {
@@ -145,7 +144,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.UserData = make([]byte, attestation.MaxUserDataLen+1)
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadUserData)
+		assert.ErrorContains(t, err, attestation.ErrBadUserData)
 	})
 
 	t.Run("ErrBadNonce", func(t *testing.T) {
@@ -154,7 +153,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.Nonce = make([]byte, attestation.MaxNonceLen+1)
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadNonce)
+		assert.ErrorContains(t, err, attestation.ErrBadNonce)
 	})
 
 	t.Run("ErrBadCABundle", func(t *testing.T) {
@@ -163,7 +162,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.CABundle = make([][]byte, 0)
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadCABundle)
+		assert.ErrorContains(t, err, attestation.ErrBadCABundle)
 	})
 
 	t.Run("ErrBadCABundleItem item nil", func(t *testing.T) {
@@ -172,7 +171,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.CABundle[0] = nil
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadCABundleItem)
+		assert.ErrorContains(t, err, attestation.ErrBadCABundleItem)
 	})
 
 	t.Run("ErrBadCABundleItem item < 1", func(t *testing.T) {
@@ -181,7 +180,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.CABundle[0] = make([]byte, 0)
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadCABundleItem)
+		assert.ErrorContains(t, err, attestation.ErrBadCABundleItem)
 	})
 
 	t.Run("ErrBadCABundleItem item > 1024", func(t *testing.T) {
@@ -190,7 +189,7 @@ func TestAttestation_VerifyAttestationDoc(t *testing.T) {
 
 		doc.CABundle[0] = make([]byte, 1025)
 		err = attestation.VerifyAttestationDoc(doc, allowSelfSignedCert)
-		assert.ErrorIs(t, err, nitrite_error.ErrBadCABundleItem)
+		assert.ErrorContains(t, err, attestation.ErrBadCABundleItem)
 	})
 }
 
