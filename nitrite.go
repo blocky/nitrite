@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/x509"
+	_ "embed"
 	"errors"
 	"fmt"
 	"math/big"
@@ -13,6 +14,16 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 )
+
+// asserts/aws_nitro_enclaves.crt contains the PEM encoded roots for verifying Nitro
+//	Enclave attestation signatures. You can download them from
+//	https://aws-nitro-enclaves.amazonaws.com/AWS_NitroEnclaves_Root-G1.zip
+//	It's recommended you calculate the SHA256 sum of this string and match
+//	it to the one supplied in the AWS documentation
+//	https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html
+
+//go:embed assets/aws_nitro_enclaves.crt
+var AWSNitroEnclavesCertPEM []byte
 
 // Document represents the AWS Nitro Enclave Attestation Document.
 type Document struct {
@@ -157,16 +168,6 @@ var (
 	ErrMarshallingCoseSignature         error = errors.New("Could not marshal COSE signature")
 )
 
-const (
-	// DefaultCARoots contains the PEM encoded roots for verifying Nitro
-	// Enclave attestation signatures. You can download them from
-	// https://aws-nitro-enclaves.amazonaws.com/AWS_NitroEnclaves_Root-G1.zip
-	// It's recommended you calculate the SHA256 sum of this string and match
-	// it to the one supplied in the AWS documentation
-	// https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html
-	DefaultCARoots string = "-----BEGIN CERTIFICATE-----\nMIICETCCAZagAwIBAgIRAPkxdWgbkK/hHUbMtOTn+FYwCgYIKoZIzj0EAwMwSTEL\nMAkGA1UEBhMCVVMxDzANBgNVBAoMBkFtYXpvbjEMMAoGA1UECwwDQVdTMRswGQYD\nVQQDDBJhd3Mubml0cm8tZW5jbGF2ZXMwHhcNMTkxMDI4MTMyODA1WhcNNDkxMDI4\nMTQyODA1WjBJMQswCQYDVQQGEwJVUzEPMA0GA1UECgwGQW1hem9uMQwwCgYDVQQL\nDANBV1MxGzAZBgNVBAMMEmF3cy5uaXRyby1lbmNsYXZlczB2MBAGByqGSM49AgEG\nBSuBBAAiA2IABPwCVOumCMHzaHDimtqQvkY4MpJzbolL//Zy2YlES1BR5TSksfbb\n48C8WBoyt7F2Bw7eEtaaP+ohG2bnUs990d0JX28TcPQXCEPZ3BABIeTPYwEoCWZE\nh8l5YoQwTcU/9KNCMEAwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUkCW1DdkF\nR+eWw5b6cp3PmanfS5YwDgYDVR0PAQH/BAQDAgGGMAoGCCqGSM49BAMDA2kAMGYC\nMQCjfy+Rocm9Xue4YnwWmNJVA44fA0P5W2OpYow9OYCVRaEevL8uO1XYru5xtMPW\nrfMCMQCi85sWBbJwKKXdS6BptQFuZbT73o/gBh1qUxl/nNr12UO8Yfwr6wPLb+6N\nIwLz3/Y=\n-----END CERTIFICATE-----\n"
-)
-
 var (
 	defaultRoot *x509.CertPool = createAWSNitroRoot()
 )
@@ -174,7 +175,7 @@ var (
 func createAWSNitroRoot() *x509.CertPool {
 	pool := x509.NewCertPool()
 
-	ok := pool.AppendCertsFromPEM([]byte(DefaultCARoots))
+	ok := pool.AppendCertsFromPEM(AWSNitroEnclavesCertPEM)
 	if !ok {
 		return nil
 	}
