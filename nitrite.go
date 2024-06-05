@@ -460,3 +460,23 @@ func checkECDSASignature(
 
 	return ecdsa.Verify(publicKey, hashSigStruct, r, s)
 }
+
+func (d *Document) FromCosePayloadBytes(bytes []byte) error {
+	cose := CosePayload{}
+	err := cbor.Unmarshal(bytes, &cose)
+	if nil != err {
+		return fmt.Errorf("unmarshaling CosePayload: %w", err)
+	}
+
+	err = cbor.Unmarshal(cose.Payload, d)
+	if nil != err {
+		return fmt.Errorf("unmarshaling Document: %w", err)
+	}
+	return nil
+}
+
+func (d *Document) CreatedAt() time.Time {
+	// Pg. 64 of https://docs.aws.amazon.com/pdfs/enclaves/latest/user/enclaves-user.pdf
+	// describes Timestamp as "UTC time when document was created, in milliseconds"
+	return time.UnixMilli(int64(d.Timestamp))
+}
