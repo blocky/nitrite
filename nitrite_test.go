@@ -50,7 +50,7 @@ func TestNitrite_Verify(t *testing.T) {
 	})
 }
 
-func TestNitriteDocument_FromCosePayloadBytes(t *testing.T) {
+func TestNitriteDocument_NewDocumentFromCosePayloadBytes(t *testing.T) {
 	attestBytes, err := base64.StdEncoding.DecodeString(nitroAttestString)
 	require.NoError(t, err)
 
