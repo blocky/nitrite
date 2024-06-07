@@ -70,3 +70,11 @@ func TestNitriteDocument_NewDocumentFromCosePayloadBytes(t *testing.T) {
 		assert.ErrorContains(t, err, "unmarshaling CosePayload")
 	})
 }
+
+func TestNitriteDocument_CreatedAt(t *testing.T) {
+	t.Run("empty document", func(t *testing.T) {
+		doc := &nitrite.Document{}
+		createdAt := doc.CreatedAt()
+		assert.Equal(t, createdAt, time.Time{})
+	})
+}

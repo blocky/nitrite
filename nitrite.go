@@ -477,6 +477,10 @@ func NewDocumentFromCosePayloadBytes(bytes []byte) (*Document, error) {
 }
 
 func (d *Document) CreatedAt() time.Time {
+	if d.Timestamp == 0 {
+		return time.Time{}
+	}
+
 	// Pg. 64 of https://docs.aws.amazon.com/pdfs/enclaves/latest/user/enclaves-user.pdf
 	// describes Timestamp as "UTC time when document was created, in milliseconds"
 	return time.UnixMilli(int64(d.Timestamp))
