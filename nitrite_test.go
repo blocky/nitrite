@@ -12,14 +12,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//go:embed testdata/expired_nitro_attestation.txt
-var expiredNitroAttestString string
+//go:embed testdata/nitro_attestation.txt
+var nitroAttestString string
 
 func TestNitrite_Verify(t *testing.T) {
-	expiredAttestBytes, err := base64.StdEncoding.DecodeString(expiredNitroAttestString)
+	attestBytes, err := base64.StdEncoding.DecodeString(nitroAttestString)
 	require.NoError(t, err)
 
-	doc, err := nitrite.NewDocumentFromCosePayloadBytes(expiredAttestBytes)
+	doc, err := nitrite.NewDocumentFromCosePayloadBytes(attestBytes)
 	require.NoError(t, err)
 
 	roots := x509.NewCertPool()
@@ -32,30 +32,30 @@ func TestNitrite_Verify(t *testing.T) {
 			Roots:       roots,
 		}
 
-		result, err := nitrite.Verify(expiredAttestBytes, opts)
+		result, err := nitrite.Verify(attestBytes, opts)
 		require.NoError(t, err)
 		assert.Equal(t, *result.Document, *doc)
 		assert.True(t, result.SignatureOK)
 	})
 
-	t.Run("expired attestation", func(t *testing.T) {
+	t.Run("certificate has expired or is not yet valid", func(t *testing.T) {
 		opts := nitrite.VerifyOptions{
-			CurrentTime: time.Now(),
+			CurrentTime: time.UnixMilli(0),
 			Roots:       roots,
 		}
 
-		result, err := nitrite.Verify(expiredAttestBytes, opts)
+		result, err := nitrite.Verify(attestBytes, opts)
 		assert.ErrorContains(t, err, "certificate has expired or is not yet valid")
 		assert.Nil(t, result)
 	})
 }
 
 func TestNitriteDocument_NewDocumentFromCosePayloadBytes(t *testing.T) {
-	expiredAttestBytes, err := base64.StdEncoding.DecodeString(expiredNitroAttestString)
+	attestBytes, err := base64.StdEncoding.DecodeString(nitroAttestString)
 	require.NoError(t, err)
 
 	t.Run("happy path", func(t *testing.T) {
-		doc, err := nitrite.NewDocumentFromCosePayloadBytes(expiredAttestBytes)
+		doc, err := nitrite.NewDocumentFromCosePayloadBytes(attestBytes)
 		require.NoError(t, err)
 
 		assert.Equal(t, doc.ModuleID, "i-0eec57d9c38705a57-enc018f25eda1b897b7")
