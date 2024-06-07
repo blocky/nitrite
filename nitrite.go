@@ -461,18 +461,19 @@ func checkECDSASignature(
 	return ecdsa.Verify(publicKey, hashSigStruct, r, s)
 }
 
-func (d *Document) FromCosePayloadBytes(bytes []byte) error {
+func NewDocumentFromCosePayloadBytes(bytes []byte) (*Document, error) {
 	cose := CosePayload{}
 	err := cbor.Unmarshal(bytes, &cose)
 	if nil != err {
-		return fmt.Errorf("unmarshaling CosePayload: %w", err)
+		return nil, fmt.Errorf("unmarshaling CosePayload: %w", err)
 	}
 
-	err = cbor.Unmarshal(cose.Payload, d)
+	doc := Document{}
+	err = cbor.Unmarshal(cose.Payload, &doc)
 	if nil != err {
-		return fmt.Errorf("unmarshaling Document: %w", err)
+		return nil, fmt.Errorf("unmarshaling Document: %w", err)
 	}
-	return nil
+	return &doc, nil
 }
 
 func (d *Document) CreatedAt() time.Time {

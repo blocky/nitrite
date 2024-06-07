@@ -19,8 +19,7 @@ func TestNitrite_Verify(t *testing.T) {
 	attestBytes, err := base64.StdEncoding.DecodeString(nitroAttestString)
 	require.NoError(t, err)
 
-	doc := nitrite.Document{}
-	err = doc.FromCosePayloadBytes(attestBytes)
+	doc, err := nitrite.NewDocumentFromCosePayloadBytes(attestBytes)
 	require.NoError(t, err)
 
 	roots := x509.NewCertPool()
@@ -35,7 +34,7 @@ func TestNitrite_Verify(t *testing.T) {
 
 		result, err := nitrite.Verify(attestBytes, opts)
 		require.NoError(t, err)
-		assert.Equal(t, *result.Document, doc)
+		assert.Equal(t, *result.Document, *doc)
 		assert.True(t, result.SignatureOK)
 	})
 
@@ -56,8 +55,7 @@ func TestNitriteDocument_FromCosePayloadBytes(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("happy path", func(t *testing.T) {
-		doc := nitrite.Document{}
-		err = doc.FromCosePayloadBytes(attestBytes)
+		doc, err := nitrite.NewDocumentFromCosePayloadBytes(attestBytes)
 		require.NoError(t, err)
 
 		assert.Equal(t, doc.ModuleID, "i-0eec57d9c38705a57-enc018f25eda1b897b7")
@@ -68,8 +66,7 @@ func TestNitriteDocument_FromCosePayloadBytes(t *testing.T) {
 	})
 
 	t.Run("error unmarshaling CosePayload", func(t *testing.T) {
-		doc := nitrite.Document{}
-		err = doc.FromCosePayloadBytes([]byte{})
+		_, err = nitrite.NewDocumentFromCosePayloadBytes([]byte{})
 		assert.ErrorContains(t, err, "unmarshaling CosePayload")
 	})
 }
