@@ -12,6 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// An easy way to create a new nitro attestation is to use delphi-cli.
+// Request an attestation over some endpoint and copy the resulting
+// "enclave_attestation" string from the output---it should be a
+// base64 encoded string
+//
 //go:embed testdata/nitro_attestation.txt
 var nitroAttestString string
 
