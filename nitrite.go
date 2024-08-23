@@ -118,16 +118,15 @@ type coseSignature struct {
 // Size of these fields (in bytes) comes from AWS Nitro documentation at
 // https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
 // from May 4, 2022.
-// With maxNonceLen = 1024, maxUserDataLen = 1024, and maxPublicKeyLen = 1024
-// the total AttestationLen = 6591.
-// An experiment on August 8, 2022, allowed user data to be maximized to
-// maxUserDataLen = 3868 with maxNonceLen = 40 and maxPublicKeyLen = 1024 for
-// the total AttestationLen = 8451.
+// An experiment on 08/22/24 shows the following configuration is also possible
+//
+//	MaxUserDataLen  = 4050
+//	MaxNonceLen     = 0
+//	MaxPublicKeyLen = 0
 const (
-	maxNonceLen       = 1024
-	maxUserDataLen    = 2048
-	maxPublicKeyLen   = 1024
-	MaxAttestationLen = 6591
+	MaxUserDataLen  = 1024
+	MaxNonceLen     = MaxUserDataLen
+	MaxPublicKeyLen = MaxUserDataLen
 )
 
 // Errors that are encountered when manipulating the COSESign1 structure.
@@ -152,15 +151,15 @@ var (
 	ErrBadCABundleItem        error = errors.New("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
 	ErrBadPublicKey           error = fmt.Errorf(
 		"Payload 'public_key' length greater than %d",
-		maxPublicKeyLen,
+		MaxPublicKeyLen,
 	)
 	ErrBadUserData error = fmt.Errorf(
 		"Payload 'user_data' length greater than %d",
-		maxUserDataLen,
+		MaxUserDataLen,
 	)
 	ErrBadNonce error = fmt.Errorf(
 		"Payload 'nonce' length greater than %d",
-		maxNonceLen,
+		MaxNonceLen,
 	)
 	ErrBadCertificatePublicKeyAlgorithm error = errors.New("Payload 'certificate' has a bad public key algorithm (not ECDSA)")
 	ErrBadCertificateSigningAlgorithm   error = errors.New("Payload 'certificate' has a bad public key signing algorithm (not ECDSAWithSHA384)")
@@ -307,13 +306,13 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	if nil != doc.PublicKey && len(doc.PublicKey) > maxPublicKeyLen {
+	if nil != doc.PublicKey && len(doc.PublicKey) > MaxPublicKeyLen {
 		return nil, ErrBadPublicKey
 	}
-	if nil != doc.UserData && len(doc.UserData) > maxUserDataLen {
+	if nil != doc.UserData && len(doc.UserData) > MaxUserDataLen {
 		return nil, ErrBadUserData
 	}
-	if nil != doc.Nonce && len(doc.Nonce) > maxNonceLen {
+	if nil != doc.Nonce && len(doc.Nonce) > MaxNonceLen {
 		return nil, ErrBadNonce
 	}
 
