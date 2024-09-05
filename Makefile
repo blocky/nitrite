@@ -15,3 +15,5 @@ test-main: tidy
 	@echo "ok\tcmd/nitrite/main.go"
 
 test: test-unit test-main
+
+pre-pr: lint test
