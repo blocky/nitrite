@@ -97,7 +97,7 @@ func (h *CoseHeader) AlgorithmInt() (int64, bool) {
 	return 0, false
 }
 
-type cosePayload struct {
+type CosePayload struct {
 	_ struct{} `cbor:",toarray"`
 
 	Protected   []byte
@@ -181,7 +181,7 @@ func createAWSNitroRoot() *x509.CertPool {
 // Timestamp extracts attestation timestamp from `data` without verifying
 // the attestation.
 func Timestamp(data []byte) (time.Time, error) {
-	cose := cosePayload{}
+	cose := CosePayload{}
 	err := cbor.Unmarshal(data, &cose)
 	if nil != err {
 		return time.Time{}, ErrBadCOSESign1Structure
@@ -241,7 +241,7 @@ func Verify(
 	rootCert RootCertFunc,
 	verificationTime VerificationTimeFunc,
 ) (*Result, error) {
-	cose := cosePayload{}
+	cose := CosePayload{}
 
 	err := cbor.Unmarshal(attestationBytes, &cose)
 	if nil != err {
