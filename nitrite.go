@@ -39,6 +39,16 @@ type Document struct {
 	Nonce     []byte `cbor:"nonce" json:"nonce,omitempty"`
 }
 
+func (d Document) CreatedAt() time.Time {
+	if d.Timestamp == 0 {
+		return time.Time{}
+	}
+
+	// Pg. 64 of https://docs.aws.amazon.com/pdfs/enclaves/latest/user/enclaves-user.pdf
+	// describes Timestamp as "UTC time when document was created, in milliseconds"
+	return time.UnixMilli(int64(d.Timestamp))
+}
+
 // Result is a successful verification result of an attestation payload.
 type Result struct {
 	// Document contains the attestation document.
@@ -63,15 +73,6 @@ type Result struct {
 	// COSESign1 contains the COSE Signature Structure which was used to
 	// calculate the `Signature`.
 	COSESign1 []byte `json:"cose_sign1,omitempty"`
-}
-
-// VerifyOptions specifies the options for verifying the attestation payload.
-// If `Roots` is nil, the `DefaultCARoot` is used. If `CurrentTime` is 0,
-// `time.Now()` will be used. It is a strong recommendation you explicitly
-// supply this value.
-type VerifyOptions struct {
-	Roots       *x509.CertPool
-	CurrentTime time.Time // todo: rename
 }
 
 type CoseHeader struct {
@@ -199,6 +200,32 @@ func Timestamp(data []byte) (time.Time, error) {
 	return doc.CreatedAt(), nil
 }
 
+type RootCertFunc func() *x509.CertPool
+
+func WithRootCert(pool *x509.CertPool) RootCertFunc {
+	return func() *x509.CertPool {
+		return pool
+	}
+}
+
+func WithDefaultRootCert() RootCertFunc {
+	return createAWSNitroRoot
+}
+
+type VerificationTimeFunc func(Document) time.Time
+
+func WithTime(t time.Time) VerificationTimeFunc {
+	return func(_ Document) time.Time {
+		return t
+	}
+}
+
+func WithAttestationTime() VerificationTimeFunc {
+	return func(doc Document) time.Time {
+		return doc.CreatedAt()
+	}
+}
+
 // Verify verifies the attestation payload from `data` with the provided
 // verification options. If the options specify `Roots` as `nil`, the
 // `DefaultCARoot` will be used. If you do not specify `CurrentTime`,
@@ -213,10 +240,14 @@ func Timestamp(data []byte) (time.Time, error) {
 // is not OK or certificate can't be verified, both Result and error will be
 // set! You can use the SignatureOK field from the result to distinguish
 // errors.
-func Verify(data []byte, options VerifyOptions) (*Result, error) {
+func Verify(
+	attestationBytes []byte,
+	rootCert RootCertFunc,
+	verificationTime VerificationTimeFunc,
+) (*Result, error) {
 	cose := cosePayload{}
 
-	err := cbor.Unmarshal(data, &cose)
+	err := cbor.Unmarshal(attestationBytes, &cose)
 	if nil != err {
 		return nil, ErrBadCOSESign1Structure
 	}
@@ -361,21 +392,11 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		certificates = append(certificates, cert)
 	}
 
-	roots := options.Roots
-	if nil == roots {
-		roots = defaultRoot
-	}
-
-	currentTime := options.CurrentTime
-	if currentTime.IsZero() {
-		currentTime = time.Now()
-	}
-
 	_, err = cert.Verify(
 		x509.VerifyOptions{
 			Intermediates: intermediates,
-			Roots:         roots,
-			CurrentTime:   currentTime,
+			Roots:         rootCert(),
+			CurrentTime:   verificationTime(doc),
 			KeyUsages: []x509.ExtKeyUsage{
 				x509.ExtKeyUsageAny,
 			},
@@ -464,14 +485,4 @@ func checkECDSASignature(
 	s = s.SetBytes(signature[len(hashSigStruct):])
 
 	return ecdsa.Verify(publicKey, hashSigStruct, r, s)
-}
-
-func (d *Document) CreatedAt() time.Time {
-	if d.Timestamp == 0 {
-		return time.Time{}
-	}
-
-	// Pg. 64 of https://docs.aws.amazon.com/pdfs/enclaves/latest/user/enclaves-user.pdf
-	// describes Timestamp as "UTC time when document was created, in milliseconds"
-	return time.UnixMilli(int64(d.Timestamp))
 }

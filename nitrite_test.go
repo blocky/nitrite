@@ -15,27 +15,11 @@ import (
 
 //go:embed testdata/nitro_attestation.txt
 var nitroAttestString string
-var nitroAttestTime = time.Date(2024, time.May, 7, 17, 43, 6, 613000000, time.UTC)
-
-func TestTimestamp(t *testing.T) {
-	attestBytes, err := base64.StdEncoding.DecodeString(nitroAttestString)
-	require.NoError(t, err)
-
-	t.Run("happy path", func(t *testing.T) {
-		// given
-		wantTime := nitroAttestTime
-
-		// when
-		gotTime, err := nitrite.Timestamp(attestBytes)
-
-		// then
-		require.NoError(t, err)
-		assert.Equal(t, wantTime, gotTime.UTC())
-	})
-}
 
 func TestNitrite_Verify(t *testing.T) {
 	attestBytes, err := base64.StdEncoding.DecodeString(nitroAttestString)
+	require.NoError(t, err)
+	attestTime, err := nitrite.Timestamp(attestBytes)
 	require.NoError(t, err)
 
 	roots := x509.NewCertPool()
@@ -43,70 +27,73 @@ func TestNitrite_Verify(t *testing.T) {
 	require.True(t, ok)
 
 	t.Run("happy path", func(t *testing.T) {
-		// given
-		timestamp, err := nitrite.Timestamp(attestBytes)
-		require.NoError(t, err)
-
-		opts := nitrite.VerifyOptions{
-			CurrentTime: timestamp,
-			Roots:       roots,
-		}
-
 		// when
-		result, err := nitrite.Verify(attestBytes, opts)
+		result, err := nitrite.Verify(
+			attestBytes,
+			nitrite.WithDefaultRootCert(),
+			nitrite.WithAttestationTime(),
+		)
 
 		// then
 		require.NoError(t, err)
 		require.NotEmpty(t, result)
 	})
 
-	timeOutOfBoundsTests := []struct {
-		name string
-		time time.Time
-	}{
-		{"certificate expired", nitroAttestTime.Add(-time.Hour)},
-		{"certificate not yet valid", nitroAttestTime.Add(time.Hour * 8760)},
-		{"zero time", time.Time{}},
-	}
-	for _, tt := range timeOutOfBoundsTests {
-		t.Run(tt.name, func(t *testing.T) {
-			// given
-			opts := nitrite.VerifyOptions{
-				CurrentTime: tt.time,
-				Roots:       roots,
-			}
-
-			// when
-			_, err := nitrite.Verify(attestBytes, opts)
-
-			// then
-			assert.ErrorContains(t, err, "certificate has expired or is not yet valid")
-		})
-	}
-
 	unknownSigningAuthorityTests := []struct {
-		name  string
-		roots *x509.CertPool
+		name        string
+		rootCertOpt nitrite.RootCertFunc
 	}{
-		// {"nil roots", nil}, // todo: handle this case
-		{"empty roots", x509.NewCertPool()},
+		{
+			"nil roots",
+			nitrite.WithRootCert(nil),
+		},
+		{
+			"empty roots",
+			nitrite.WithRootCert(x509.NewCertPool()),
+		},
 	}
 	for _, tt := range unknownSigningAuthorityTests {
 		t.Run(tt.name, func(t *testing.T) {
-			// given
-			timestamp, err := nitrite.Timestamp(attestBytes)
-			require.NoError(t, err)
-
-			opts := nitrite.VerifyOptions{
-				CurrentTime: timestamp,
-				Roots:       tt.roots,
-			}
-
 			// when
-			_, err = nitrite.Verify(attestBytes, opts)
+			_, err = nitrite.Verify(
+				attestBytes,
+				tt.rootCertOpt,
+				nitrite.WithAttestationTime(),
+			)
 
 			// then
 			assert.ErrorContains(t, err, "verifying certificate")
+		})
+	}
+
+	timeOutOfBoundsTests := []struct {
+		name    string
+		timeOpt nitrite.VerificationTimeFunc
+	}{
+		{
+			"certificate expired",
+			nitrite.WithTime(attestTime.Add(-time.Hour)),
+		},
+		{
+			"certificate not yet valid",
+			nitrite.WithTime(attestTime.Add(time.Hour * 8760)),
+		},
+		{
+			"zero time",
+			nitrite.WithTime(time.Time{}),
+		},
+	}
+	for _, tt := range timeOutOfBoundsTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			_, err := nitrite.Verify(
+				attestBytes,
+				nitrite.WithDefaultRootCert(),
+				tt.timeOpt,
+			)
+
+			// then
+			assert.ErrorContains(t, err, "certificate has expired or is not yet valid")
 		})
 	}
 }
