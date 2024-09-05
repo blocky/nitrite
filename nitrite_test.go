@@ -97,3 +97,20 @@ func TestNitrite_Verify(t *testing.T) {
 		})
 	}
 }
+
+func TestDocument_CreatedAt(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		// given
+		attestBytes, err := base64.StdEncoding.DecodeString(nitroAttestString)
+		require.NoError(t, err)
+		wantTime, err := nitrite.Timestamp(attestBytes)
+		require.NoError(t, err)
+
+		// when
+		gotTime, err := nitrite.Timestamp(attestBytes)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, wantTime, gotTime)
+	})
+}
