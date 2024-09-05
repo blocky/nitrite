@@ -70,9 +70,8 @@ type Result struct {
 // `time.Now()` will be used. It is a strong recommendation you explicitly
 // supply this value.
 type VerifyOptions struct {
-	Roots               *x509.CertPool
-	CurrentTime         time.Time // todo: rename
-	AllowSelfSignedCert bool
+	Roots       *x509.CertPool
+	CurrentTime time.Time // todo: rename
 }
 
 type CoseHeader struct {
@@ -282,7 +281,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, ErrMandatoryFieldsMissing
 	}
 
-	if !options.AllowSelfSignedCert && nil == doc.CABundle {
+	if nil == doc.CABundle {
 		return nil, ErrMandatoryFieldsMissing
 	}
 
@@ -312,15 +311,13 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	if !options.AllowSelfSignedCert && len(doc.CABundle) < 1 {
+	if len(doc.CABundle) < 1 {
 		return nil, ErrBadCABundle
 	}
 
-	if !options.AllowSelfSignedCert {
-		for _, item := range doc.CABundle {
-			if nil == item || len(item) < 1 || len(item) > 1024 {
-				return nil, ErrBadCABundleItem
-			}
+	for _, item := range doc.CABundle {
+		if nil == item || len(item) < 1 || len(item) > 1024 {
+			return nil, ErrBadCABundleItem
 		}
 	}
 
@@ -335,11 +332,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 	}
 
 	var certificates []*x509.Certificate
-	if !options.AllowSelfSignedCert {
-		certificates = make([]*x509.Certificate, 0, len(doc.CABundle)+1)
-	} else {
-		certificates = make([]*x509.Certificate, 1)
-	}
+	certificates = make([]*x509.Certificate, 0, len(doc.CABundle)+1)
 
 	cert, err := x509.ParseCertificate(doc.Certificate)
 	if nil != err {
@@ -358,24 +351,19 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 
 	intermediates := x509.NewCertPool()
 
-	if !options.AllowSelfSignedCert {
-		for _, item := range doc.CABundle {
-			cert, err := x509.ParseCertificate(item)
-			if nil != err {
-				return nil, err
-			}
-
-			intermediates.AddCert(cert)
-			certificates = append(certificates, cert)
+	for _, item := range doc.CABundle {
+		cert, err := x509.ParseCertificate(item)
+		if nil != err {
+			return nil, err
 		}
+
+		intermediates.AddCert(cert)
+		certificates = append(certificates, cert)
 	}
 
 	roots := options.Roots
 	if nil == roots {
 		roots = defaultRoot
-	}
-	if cert.IsCA {
-		roots.AddCert(cert)
 	}
 
 	currentTime := options.CurrentTime
