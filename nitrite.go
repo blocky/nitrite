@@ -167,10 +167,6 @@ var (
 	ErrMarshallingCoseSignature         error = errors.New("Could not marshal COSE signature")
 )
 
-var (
-	defaultRoot *x509.CertPool = createAWSNitroRoot()
-)
-
 func createAWSNitroRoot() *x509.CertPool {
 	pool := x509.NewCertPool()
 
