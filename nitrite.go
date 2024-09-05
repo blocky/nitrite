@@ -71,7 +71,7 @@ type Result struct {
 // supply this value.
 type VerifyOptions struct {
 	Roots               *x509.CertPool
-	CurrentTime         time.Time
+	CurrentTime         time.Time // todo: rename
 	AllowSelfSignedCert bool
 }
 
@@ -97,7 +97,7 @@ func (h *CoseHeader) AlgorithmInt() (int64, bool) {
 	return 0, false
 }
 
-type CosePayload struct {
+type cosePayload struct {
 	_ struct{} `cbor:",toarray"`
 
 	Protected   []byte
@@ -182,6 +182,24 @@ func createAWSNitroRoot() *x509.CertPool {
 	return pool
 }
 
+// Timestamp extracts attestation timestamp from `data` without verifying
+// the attestation.
+func Timestamp(data []byte) (time.Time, error) {
+	cose := cosePayload{}
+	err := cbor.Unmarshal(data, &cose)
+	if nil != err {
+		return time.Time{}, ErrBadCOSESign1Structure
+	}
+
+	doc := Document{}
+	err = cbor.Unmarshal(cose.Payload, &doc)
+	if nil != err {
+		return time.Time{}, ErrBadAttestationDocument
+	}
+
+	return doc.CreatedAt(), nil
+}
+
 // Verify verifies the attestation payload from `data` with the provided
 // verification options. If the options specify `Roots` as `nil`, the
 // `DefaultCARoot` will be used. If you do not specify `CurrentTime`,
@@ -197,7 +215,7 @@ func createAWSNitroRoot() *x509.CertPool {
 // set! You can use the SignatureOK field from the result to distinguish
 // errors.
 func Verify(data []byte, options VerifyOptions) (*Result, error) {
-	cose := CosePayload{}
+	cose := cosePayload{}
 
 	err := cbor.Unmarshal(data, &cose)
 	if nil != err {
@@ -376,7 +394,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		},
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("verifying certificate: %w", err)
 	}
 
 	coseSig := coseSignature{
@@ -458,21 +476,6 @@ func checkECDSASignature(
 	s = s.SetBytes(signature[len(hashSigStruct):])
 
 	return ecdsa.Verify(publicKey, hashSigStruct, r, s)
-}
-
-func NewDocumentFromCosePayloadBytes(bytes []byte) (*Document, error) {
-	cose := CosePayload{}
-	err := cbor.Unmarshal(bytes, &cose)
-	if nil != err {
-		return nil, fmt.Errorf("unmarshaling CosePayload: %w", err)
-	}
-
-	doc := Document{}
-	err = cbor.Unmarshal(cose.Payload, &doc)
-	if nil != err {
-		return nil, fmt.Errorf("unmarshaling Document: %w", err)
-	}
-	return &doc, nil
 }
 
 func (d *Document) CreatedAt() time.Time {

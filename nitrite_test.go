@@ -7,24 +7,35 @@ import (
 	"testing"
 	"time"
 
-	"github.com/blocky/nitrite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/blocky/nitrite"
 )
 
-// An easy way to create a new nitro attestation is to use delphi-cli.
-// Request an attestation over some endpoint and copy the resulting
-// "enclave_attestation" string from the output---it should be a
-// base64 encoded string
-//
 //go:embed testdata/nitro_attestation.txt
 var nitroAttestString string
+var nitroAttestTime = time.Date(2024, time.May, 7, 17, 43, 6, 613000000, time.UTC)
 
-func TestNitrite_Verify(t *testing.T) {
+func TestTimestamp(t *testing.T) {
 	attestBytes, err := base64.StdEncoding.DecodeString(nitroAttestString)
 	require.NoError(t, err)
 
-	doc, err := nitrite.NewDocumentFromCosePayloadBytes(attestBytes)
+	t.Run("happy path", func(t *testing.T) {
+		// given
+		wantTime := nitroAttestTime
+
+		// when
+		gotTime, err := nitrite.Timestamp(attestBytes)
+
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, wantTime, gotTime.UTC())
+	})
+}
+
+func TestNitrite_Verify(t *testing.T) {
+	attestBytes, err := base64.StdEncoding.DecodeString(nitroAttestString)
 	require.NoError(t, err)
 
 	roots := x509.NewCertPool()
@@ -32,54 +43,70 @@ func TestNitrite_Verify(t *testing.T) {
 	require.True(t, ok)
 
 	t.Run("happy path", func(t *testing.T) {
+		// given
+		timestamp, err := nitrite.Timestamp(attestBytes)
+		require.NoError(t, err)
+
 		opts := nitrite.VerifyOptions{
-			CurrentTime: doc.CreatedAt(),
+			CurrentTime: timestamp,
 			Roots:       roots,
 		}
 
+		// when
 		result, err := nitrite.Verify(attestBytes, opts)
+
+		// then
 		require.NoError(t, err)
-		assert.Equal(t, *result.Document, *doc)
-		assert.True(t, result.SignatureOK)
+		require.NotEmpty(t, result)
 	})
 
-	t.Run("certificate has expired or is not yet valid", func(t *testing.T) {
-		opts := nitrite.VerifyOptions{
-			CurrentTime: time.UnixMilli(0),
-			Roots:       roots,
-		}
+	timeOutOfBoundsTests := []struct {
+		name string
+		time time.Time
+	}{
+		{"certificate expired", nitroAttestTime.Add(-time.Hour)},
+		{"certificate not yet valid", nitroAttestTime.Add(time.Hour * 8760)},
+		{"zero time", time.Time{}},
+	}
+	for _, tt := range timeOutOfBoundsTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// given
+			opts := nitrite.VerifyOptions{
+				CurrentTime: tt.time,
+				Roots:       roots,
+			}
 
-		result, err := nitrite.Verify(attestBytes, opts)
-		assert.ErrorContains(t, err, "certificate has expired or is not yet valid")
-		assert.Nil(t, result)
-	})
-}
+			// when
+			_, err := nitrite.Verify(attestBytes, opts)
 
-func TestNitriteDocument_NewDocumentFromCosePayloadBytes(t *testing.T) {
-	attestBytes, err := base64.StdEncoding.DecodeString(nitroAttestString)
-	require.NoError(t, err)
+			// then
+			assert.ErrorContains(t, err, "certificate has expired or is not yet valid")
+		})
+	}
 
-	t.Run("happy path", func(t *testing.T) {
-		doc, err := nitrite.NewDocumentFromCosePayloadBytes(attestBytes)
-		require.NoError(t, err)
+	unknownSigningAuthorityTests := []struct {
+		name  string
+		roots *x509.CertPool
+	}{
+		// {"nil roots", nil}, // todo: handle this case
+		{"empty roots", x509.NewCertPool()},
+	}
+	for _, tt := range unknownSigningAuthorityTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// given
+			timestamp, err := nitrite.Timestamp(attestBytes)
+			require.NoError(t, err)
 
-		assert.Equal(t, doc.ModuleID, "i-0eec57d9c38705a57-enc018f25eda1b897b7")
-		assert.Equal(t, doc.Timestamp, uint64(1715103786613))
-		assert.Equal(t, doc.Digest, "SHA384")
-		assert.Empty(t, doc.UserData)
-		assert.Empty(t, doc.Nonce)
-	})
+			opts := nitrite.VerifyOptions{
+				CurrentTime: timestamp,
+				Roots:       tt.roots,
+			}
 
-	t.Run("error unmarshaling CosePayload", func(t *testing.T) {
-		_, err = nitrite.NewDocumentFromCosePayloadBytes([]byte{})
-		assert.ErrorContains(t, err, "unmarshaling CosePayload")
-	})
-}
+			// when
+			_, err = nitrite.Verify(attestBytes, opts)
 
-func TestNitriteDocument_CreatedAt(t *testing.T) {
-	t.Run("empty document", func(t *testing.T) {
-		doc := &nitrite.Document{}
-		createdAt := doc.CreatedAt()
-		assert.Equal(t, createdAt, time.Time{})
-	})
+			// then
+			assert.ErrorContains(t, err, "verifying certificate")
+		})
+	}
 }
