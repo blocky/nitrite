@@ -4,7 +4,7 @@ tidy:
 	@go mod tidy
 
 lint: tidy
-	@golangci-lint run --config ./config/golangci.yaml
+	@golangci-lint run --config ./golangci.yaml
 
 test-unit: tidy
 	@go test ./...
