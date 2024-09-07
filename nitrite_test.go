@@ -23,7 +23,6 @@ var attestationTime = time.Date(2024, time.September, 7, 14, 37, 39, 545000000, 
 
 //go:embed testdata/nitro_attestation_debug.b64
 var debugAttestationB64 string
-var debugAttestationTime = time.Date(2024, time.September, 7, 14, 38, 6, 508000000, time.UTC)
 
 func TestNitrite_Verify(t *testing.T) {
 	attestation, err := base64.StdEncoding.DecodeString(attestationB64)
@@ -33,18 +32,33 @@ func TestNitrite_Verify(t *testing.T) {
 	ok := roots.AppendCertsFromPEM(nitrite.AWSNitroEnclavesCertPEM)
 	require.True(t, ok)
 
-	t.Run("happy path", func(t *testing.T) {
-		// when
-		result, err := nitrite.Verify(
-			attestation,
-			nitrite.WithDefaultRootCert(),
-			nitrite.WithAttestationTime(),
-		)
+	happyPathTests := []struct {
+		name           string
+		attestationB64 string
+	}{
+		{
+			"regular attestation",
+			attestationB64,
+		},
+		{
+			"debug attestation",
+			debugAttestationB64,
+		},
+	}
+	for _, tt := range happyPathTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			result, err := nitrite.Verify(
+				attestation,
+				nitrite.WithRootCert(roots),
+				nitrite.WithAttestationTime(),
+			)
 
-		// then
-		require.NoError(t, err)
-		require.NotEmpty(t, result)
-	})
+			// then
+			require.NoError(t, err)
+			require.NotEmpty(t, result)
+		})
+	}
 
 	unknownSigningAuthorityTests := []struct {
 		name        string
