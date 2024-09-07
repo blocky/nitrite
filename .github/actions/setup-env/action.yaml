@@ -10,6 +10,9 @@ inputs:
     description: 'Cache Golang dependencies'
     required: false
     default: 'true'
+  go-version-file:
+    description: 'Path to go.mod to pull go version from'
+    required: true
 
 runs:
   using: 'composite'
@@ -18,5 +21,5 @@ runs:
       uses: actions/setup-go@v5
       if: ${{ inputs.go == 'true' }}
       with:
-        go-version: 1.21.11
         cache: ${{ inputs.go-cache }}
+        go-version-file: ${{ inputs.go-version-file }}
