@@ -12,6 +12,9 @@ import (
 	"github.com/blocky/nitrite"
 )
 
+// The canonical way to regenerate attestations is to request an attestation
+// using hf/nsm/Send() and write the resulting bytes directly to a file.
+
 //go:embed testdata/nitro_attestation
 var attestation []byte
 var attestationTime = time.Date(2024, time.September, 7, 14, 37, 39, 545000000, time.UTC)
