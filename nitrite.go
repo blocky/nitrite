@@ -178,24 +178,6 @@ func createAWSNitroRoot() *x509.CertPool {
 	return pool
 }
 
-// Timestamp extracts attestation timestamp from `data` without verifying
-// the attestation.
-func Timestamp(data []byte) (time.Time, error) {
-	cose := CosePayload{}
-	err := cbor.Unmarshal(data, &cose)
-	if nil != err {
-		return time.Time{}, ErrBadCOSESign1Structure
-	}
-
-	doc := Document{}
-	err = cbor.Unmarshal(cose.Payload, &doc)
-	if nil != err {
-		return time.Time{}, ErrBadAttestationDocument
-	}
-
-	return doc.CreatedAt(), nil
-}
-
 type RootCertFunc func() *x509.CertPool
 
 func WithRootCert(pool *x509.CertPool) RootCertFunc {
@@ -388,6 +370,10 @@ func Verify(
 		certificates = append(certificates, cert)
 	}
 
+	if verificationTime(doc).IsZero() {
+		return nil, fmt.Errorf("verification time is 0")
+	}
+
 	_, err = cert.Verify(
 		x509.VerifyOptions{
 			Intermediates: intermediates,
@@ -420,7 +406,7 @@ func Verify(
 		cose.Signature,
 	)
 
-	if !signatureOk && nil == err {
+	if !signatureOk {
 		err = ErrBadSignature
 	}
 
