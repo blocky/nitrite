@@ -10,7 +10,7 @@ test-unit: tidy
 	@go test ./...
 
 test-main: tidy
-	@$(eval attestation := $(shell cat testdata/nitro_attestation | base64 --wrap=0))
+	@$(eval attestation := $(shell cat testdata/nitro_attestation.b64))
 	@go run cmd/nitrite/main.go -attestation $(attestation) > /dev/null
 	@echo "ok\tcmd/nitrite/main.go"
 

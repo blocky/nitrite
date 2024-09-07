@@ -3,6 +3,7 @@ package nitrite_test
 import (
 	"crypto/x509"
 	_ "embed"
+	"encoding/base64"
 	"testing"
 	"time"
 
@@ -13,17 +14,21 @@ import (
 )
 
 // The canonical way to regenerate attestations is to request an attestation
-// using hf/nsm/Send() and write the resulting bytes directly to a file.
+// using hf/nsm/Send() and write the resulting bytes to a file as a base64
+// string.
 
-//go:embed testdata/nitro_attestation
-var attestation []byte
+//go:embed testdata/nitro_attestation.b64
+var attestationB64 string
 var attestationTime = time.Date(2024, time.September, 7, 14, 37, 39, 545000000, time.UTC)
 
-//go:embed testdata/nitro_attestation_debug
-var debugAttestation []byte
+//go:embed testdata/nitro_attestation_debug.b64
+var debugAttestationB64 string
 var debugAttestationTime = time.Date(2024, time.September, 7, 14, 38, 6, 508000000, time.UTC)
 
 func TestNitrite_Verify(t *testing.T) {
+	attestation, err := base64.StdEncoding.DecodeString(attestationB64)
+	require.NoError(t, err)
+
 	roots := x509.NewCertPool()
 	ok := roots.AppendCertsFromPEM(nitrite.AWSNitroEnclavesCertPEM)
 	require.True(t, ok)
@@ -105,6 +110,9 @@ func TestNitrite_Verify(t *testing.T) {
 }
 
 func TestDocument_CreatedAt(t *testing.T) {
+	attestation, err := base64.StdEncoding.DecodeString(attestationB64)
+	require.NoError(t, err)
+
 	t.Run("happy path", func(t *testing.T) {
 		// given
 		wantTime := attestationTime
