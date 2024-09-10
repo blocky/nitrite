@@ -19,7 +19,6 @@ runs:
   steps:
     - name: Set up Go
       uses: actions/setup-go@v5
-      if: ${{ inputs.go == 'true' }}
       with:
         cache: ${{ inputs.go-cache }}
         go-version-file: ${{ inputs.go-version-file }}

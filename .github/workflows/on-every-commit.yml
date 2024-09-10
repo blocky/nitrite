@@ -21,7 +21,6 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-env
         with:
-          go: 'true'
           go-version-file: './go.mod'
 
       - name: Run Unit Tests
