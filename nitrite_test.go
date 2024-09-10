@@ -25,7 +25,7 @@ var attestationTime = time.Date(2024, time.September, 7, 14, 37, 39, 545000000, 
 var debugAttestationB64 string
 
 func TestNitrite_Verify(t *testing.T) {
-	attestation, err := base64.StdEncoding.DecodeString(attestationB64)
+	regularAttestation, err := base64.StdEncoding.DecodeString(attestationB64)
 	require.NoError(t, err)
 	debugAttestation, err := base64.StdEncoding.DecodeString(debugAttestationB64)
 	require.NoError(t, err)
@@ -40,7 +40,7 @@ func TestNitrite_Verify(t *testing.T) {
 	}{
 		{
 			"regular attestation",
-			attestation,
+			regularAttestation,
 		},
 		{
 			"debug attestation",
@@ -79,7 +79,7 @@ func TestNitrite_Verify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// when
 			_, err := nitrite.Verify(
-				attestation,
+				regularAttestation,
 				tt.rootCertOpt,
 				nitrite.WithAttestationTime(),
 			)
@@ -114,7 +114,7 @@ func TestNitrite_Verify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// when
 			_, err := nitrite.Verify(
-				attestation,
+				regularAttestation,
 				nitrite.WithDefaultRootCert(),
 				tt.timeOpt,
 			)
