@@ -27,29 +27,31 @@ var debugAttestationB64 string
 func TestNitrite_Verify(t *testing.T) {
 	attestation, err := base64.StdEncoding.DecodeString(attestationB64)
 	require.NoError(t, err)
+	debugAttestation, err := base64.StdEncoding.DecodeString(debugAttestationB64)
+	require.NoError(t, err)
 
 	roots := x509.NewCertPool()
 	ok := roots.AppendCertsFromPEM(nitrite.AWSNitroEnclavesCertPEM)
 	require.True(t, ok)
 
 	happyPathTests := []struct {
-		name           string
-		attestationB64 string
+		name        string
+		attestation []byte
 	}{
 		{
 			"regular attestation",
-			attestationB64,
+			attestation,
 		},
 		{
 			"debug attestation",
-			debugAttestationB64,
+			debugAttestation,
 		},
 	}
 	for _, tt := range happyPathTests {
 		t.Run(tt.name, func(t *testing.T) {
 			// when
 			result, err := nitrite.Verify(
-				attestation,
+				tt.attestation,
 				nitrite.WithRootCert(roots),
 				nitrite.WithAttestationTime(),
 			)
