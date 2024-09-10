@@ -126,24 +126,32 @@ func TestNitrite_Verify(t *testing.T) {
 }
 
 func TestDocument_CreatedAt(t *testing.T) {
-	attestation, err := base64.StdEncoding.DecodeString(attestationB64)
-	require.NoError(t, err)
+	happyPathTests := []struct {
+		name      string
+		timestamp uint64
+		wantTime  time.Time
+	}{
+		{
+			"happy path",
+			uint64(attestationTime.UnixMilli()),
+			attestationTime,
+		},
+		{
+			"zero time",
+			uint64(0),
+			time.Time{},
+		},
+	}
+	for _, tt := range happyPathTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// given
+			doc := nitrite.Document{Timestamp: tt.timestamp}
 
-	t.Run("happy path", func(t *testing.T) {
-		// given
-		wantTime := attestationTime
+			// when
+			gotTime := doc.CreatedAt()
 
-		result, err := nitrite.Verify(
-			attestation,
-			nitrite.WithDefaultRootCert(),
-			nitrite.WithAttestationTime(),
-		)
-
-		// when
-		gotTime := result.Document.CreatedAt()
-
-		// then
-		require.NoError(t, err)
-		assert.Equal(t, wantTime.UTC(), gotTime.UTC())
-	})
+			// then
+			assert.Equal(t, tt.wantTime.UTC(), gotTime.UTC())
+		})
+	}
 }
