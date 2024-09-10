@@ -1,6 +1,6 @@
 module github.com/blocky/nitrite
 
-go 1.21.11
+go 1.19
 
 require (
 	github.com/fxamacker/cbor/v2 v2.4.0
