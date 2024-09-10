@@ -19,10 +19,11 @@ import (
 
 //go:embed testdata/nitro_attestation.b64
 var attestationB64 string
-var attestationTime = time.Date(2024, time.September, 7, 14, 37, 39, 545000000, time.UTC)
+var regularAttestationTime = time.Date(2024, time.September, 7, 14, 37, 39, 545000000, time.UTC)
 
 //go:embed testdata/nitro_attestation_debug.b64
 var debugAttestationB64 string
+var debugAttestationTime = time.Date(2024, time.September, 7, 14, 38, 6, 508000000, time.UTC)
 
 func TestNitrite_Verify(t *testing.T) {
 	regularAttestation, err := base64.StdEncoding.DecodeString(attestationB64)
@@ -35,16 +36,19 @@ func TestNitrite_Verify(t *testing.T) {
 	require.True(t, ok)
 
 	happyPathTests := []struct {
-		name        string
-		attestation []byte
+		name            string
+		attestation     []byte
+		attestationTime time.Time
 	}{
 		{
 			"regular attestation",
 			regularAttestation,
+			regularAttestationTime,
 		},
 		{
 			"debug attestation",
 			debugAttestation,
+			debugAttestationTime,
 		},
 	}
 	for _, tt := range happyPathTests {
@@ -58,7 +62,12 @@ func TestNitrite_Verify(t *testing.T) {
 
 			// then
 			require.NoError(t, err)
-			require.NotEmpty(t, result)
+			// make sure at least one of the fields is populated and attested
+			assert.Equal(
+				t,
+				tt.attestationTime.UTC(),
+				time.UnixMilli(int64(result.Document.Timestamp)).UTC(),
+			)
 		})
 	}
 
@@ -96,12 +105,12 @@ func TestNitrite_Verify(t *testing.T) {
 	}{
 		{
 			"certificate expired",
-			nitrite.WithTime(attestationTime.Add(-time.Hour)),
+			nitrite.WithTime(regularAttestationTime.Add(-time.Hour)),
 			"verifying certificate",
 		},
 		{
 			"certificate not yet valid",
-			nitrite.WithTime(attestationTime.Add(time.Hour * 8760)),
+			nitrite.WithTime(regularAttestationTime.Add(time.Hour * 8760)),
 			"verifying certificate",
 		},
 		{
@@ -133,8 +142,8 @@ func TestDocument_CreatedAt(t *testing.T) {
 	}{
 		{
 			"happy path",
-			uint64(attestationTime.UnixMilli()),
-			attestationTime,
+			uint64(regularAttestationTime.UnixMilli()),
+			regularAttestationTime,
 		},
 		{
 			"zero time",
