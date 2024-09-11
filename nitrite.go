@@ -13,17 +13,9 @@ import (
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
+
+	"github.com/blocky/nitrite/internal"
 )
-
-// asserts/aws_nitro_enclaves.crt contains the PEM encoded roots for verifying Nitro
-//	Enclave attestation signatures. You can download them from
-//	https://aws-nitro-enclaves.amazonaws.com/AWS_NitroEnclaves_Root-G1.zip
-//	It's recommended you calculate the SHA256 sum of this string and match
-//	it to the one supplied in the AWS documentation
-//	https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html
-
-//go:embed assets/aws_nitro_enclaves.crt
-var AWSNitroEnclavesCertPEM []byte
 
 // Document represents the AWS Nitro Enclave Attestation Document.
 type Document struct {
@@ -45,8 +37,20 @@ func (d Document) CreatedAt() time.Time {
 	}
 
 	// Pg. 64 of https://docs.aws.amazon.com/pdfs/enclaves/latest/user/enclaves-user.pdf
-	// describes Timestamp as "UTC time when document was created, in milliseconds"
-	return time.UnixMilli(int64(d.Timestamp))
+	// describes Timestamp as "UTC time when document was created, in milliseconds".
+	// On the other, self-signed attestation timestamps are in seconds, so
+	// we need to figure out which time of timestamp to convert.
+	// TODO: Remove this check and use UnixMilli as part of
+	//  https://blocky.atlassian.net/browse/BKY-5620
+
+	var createdAt time.Time
+	if time.UnixMilli(int64(d.Timestamp)).Year() < 1980 {
+		createdAt = time.Unix(int64(d.Timestamp), 0)
+	} else {
+		createdAt = time.UnixMilli(int64(d.Timestamp))
+	}
+
+	return createdAt
 }
 
 // Result is a successful verification result of an attestation payload.
@@ -167,29 +171,6 @@ var (
 	ErrMarshallingCoseSignature         error = errors.New("Could not marshal COSE signature")
 )
 
-func createAWSNitroRoot() *x509.CertPool {
-	pool := x509.NewCertPool()
-
-	ok := pool.AppendCertsFromPEM(AWSNitroEnclavesCertPEM)
-	if !ok {
-		return nil
-	}
-
-	return pool
-}
-
-type RootCertFunc func() *x509.CertPool
-
-func WithRootCert(pool *x509.CertPool) RootCertFunc {
-	return func() *x509.CertPool {
-		return pool
-	}
-}
-
-func WithDefaultRootCert() RootCertFunc {
-	return createAWSNitroRoot
-}
-
 type VerificationTimeFunc func(Document) time.Time
 
 func WithTime(t time.Time) VerificationTimeFunc {
@@ -203,6 +184,13 @@ func WithAttestationTime() VerificationTimeFunc {
 		return doc.CreatedAt()
 	}
 }
+
+type CertProvider interface {
+	Roots() (*x509.CertPool, error)
+}
+
+var MakeNitroCertProvider = internal.MakeNitroCertProvider
+var MakeSelfSignedCertProvider = internal.MakeSelfSignedCertProvider
 
 // Verify verifies the attestation payload from `data` with the provided
 // verification options. If the options specify `Roots` as `nil`, the
@@ -219,13 +207,16 @@ func WithAttestationTime() VerificationTimeFunc {
 // set! You can use the SignatureOK field from the result to distinguish
 // errors.
 func Verify(
-	attestationBytes []byte,
-	rootCert RootCertFunc,
+	attestation []byte,
+	certProvider CertProvider,
 	verificationTime VerificationTimeFunc,
-) (*Result, error) {
+) (
+	*Result,
+	error,
+) {
 	cose := cosePayload{}
 
-	err := cbor.Unmarshal(attestationBytes, &cose)
+	err := cbor.Unmarshal(attestation, &cose)
 	if nil != err {
 		return nil, ErrBadCOSESign1Structure
 	}
@@ -290,7 +281,14 @@ func Verify(
 		return nil, ErrMandatoryFieldsMissing
 	}
 
-	if nil == doc.CABundle {
+	cert, err := x509.ParseCertificate(doc.Certificate)
+	if nil != err {
+		return nil, err
+	}
+
+	// TODO: remove the support for self-signed attestations as part of
+	//  https://blocky.atlassian.net/browse/BKY-5620 (remove !cert.IsCA path)
+	if !cert.IsCA && nil == doc.CABundle {
 		return nil, ErrMandatoryFieldsMissing
 	}
 
@@ -320,13 +318,15 @@ func Verify(
 		}
 	}
 
-	if len(doc.CABundle) < 1 {
+	if !cert.IsCA && len(doc.CABundle) < 1 {
 		return nil, ErrBadCABundle
 	}
 
-	for _, item := range doc.CABundle {
-		if nil == item || len(item) < 1 || len(item) > 1024 {
-			return nil, ErrBadCABundleItem
+	if !cert.IsCA {
+		for _, item := range doc.CABundle {
+			if nil == item || len(item) < 1 || len(item) > 1024 {
+				return nil, ErrBadCABundleItem
+			}
 		}
 	}
 
@@ -341,11 +341,10 @@ func Verify(
 	}
 
 	var certificates []*x509.Certificate
-	certificates = make([]*x509.Certificate, 0, len(doc.CABundle)+1)
-
-	cert, err := x509.ParseCertificate(doc.Certificate)
-	if nil != err {
-		return nil, err
+	if !cert.IsCA {
+		certificates = make([]*x509.Certificate, 0, len(doc.CABundle)+1)
+	} else {
+		certificates = make([]*x509.Certificate, 1)
 	}
 
 	if x509.ECDSA != cert.PublicKeyAlgorithm {
@@ -360,24 +359,31 @@ func Verify(
 
 	intermediates := x509.NewCertPool()
 
-	for _, item := range doc.CABundle {
-		cert, err := x509.ParseCertificate(item)
-		if nil != err {
-			return nil, err
-		}
+	if !cert.IsCA {
+		for _, item := range doc.CABundle {
+			cert, err := x509.ParseCertificate(item)
+			if nil != err {
+				return nil, err
+			}
 
-		intermediates.AddCert(cert)
-		certificates = append(certificates, cert)
+			intermediates.AddCert(cert)
+			certificates = append(certificates, cert)
+		}
 	}
 
 	if verificationTime(doc).IsZero() {
 		return nil, fmt.Errorf("verification time is 0")
 	}
 
+	roots, err := certProvider.Roots()
+	if nil != err {
+		return nil, fmt.Errorf("getting root certificates: %w", err)
+	}
+
 	_, err = cert.Verify(
 		x509.VerifyOptions{
 			Intermediates: intermediates,
-			Roots:         rootCert(),
+			Roots:         roots,
 			CurrentTime:   verificationTime(doc),
 			KeyUsages: []x509.ExtKeyUsage{
 				x509.ExtKeyUsageAny,
