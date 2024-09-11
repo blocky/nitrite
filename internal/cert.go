@@ -15,7 +15,7 @@ import (
 //	https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html
 
 //go:embed assets/aws_nitro_enclaves.crt
-var nitroCertPEM []byte
+var NitroCertPEM []byte
 
 //go:embed assets/selfsigned_cert.der
 var selfSignedCertDER []byte
@@ -27,8 +27,17 @@ func MakeNitroCertProvider() NitroCertProvider {
 }
 
 func (cp NitroCertProvider) Roots() (*x509.CertPool, error) {
+	return cp.RootsWithCerts(NitroCertPEM)
+}
+
+func (cp NitroCertProvider) RootsWithCerts(
+	pemCerts []byte,
+) (
+	*x509.CertPool,
+	error,
+) {
 	certs := x509.NewCertPool()
-	ok := certs.AppendCertsFromPEM(nitroCertPEM)
+	ok := certs.AppendCertsFromPEM(pemCerts)
 	if !ok {
 		return nil, fmt.Errorf("appending cert")
 	}
@@ -42,10 +51,19 @@ func MakeSelfSignedCertProvider() SelfSignedCertProvider {
 }
 
 func (cp SelfSignedCertProvider) Roots() (*x509.CertPool, error) {
+	return cp.RootWithCert(selfSignedCertDER)
+}
+
+func (cp SelfSignedCertProvider) RootWithCert(
+	derCert []byte,
+) (
+	*x509.CertPool,
+	error,
+) {
 	certs := x509.NewCertPool()
 	pemCert := pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
-		Bytes: selfSignedCertDER,
+		Bytes: derCert,
 	})
 	if nil == pemCert {
 		return nil, fmt.Errorf("encoding self-signed cert")
@@ -58,5 +76,3 @@ func (cp SelfSignedCertProvider) Roots() (*x509.CertPool, error) {
 
 	return certs, nil
 }
-
-// todo: test these
