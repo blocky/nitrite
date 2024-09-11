@@ -20,7 +20,7 @@ import (
 func verifyAttestation(attestation []byte) error {
 	res, err := nitrite.Verify(
 		attestation,
-		nitrite.WithDefaultRootCert(),
+		nitrite.MakeNitroCertProvider(),
 		nitrite.WithAttestationTime(),
 	)
 
