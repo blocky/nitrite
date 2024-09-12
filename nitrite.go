@@ -189,8 +189,8 @@ type CertProvider interface {
 	Roots() (*x509.CertPool, error)
 }
 
-var MakeNitroCertProvider = internal.MakeNitroCertProvider
-var MakeSelfSignedCertProvider = internal.MakeSelfSignedCertProvider
+var NewNitroCertProvider = internal.NewNitroCertProvider
+var NewSelfSignedCertProvider = internal.NewSelfSignedCertProvider
 
 // Verify verifies the attestation payload from `data` with the provided
 // verification options. If the options specify `Roots` as `nil`, the
