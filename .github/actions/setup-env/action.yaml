@@ -1,0 +1,24 @@
+name: Setup Environment
+description: 'Setup Environment for workflows'
+
+inputs:
+  go:
+    description: 'Install Golang'
+    required: false
+    default: 'false'
+  go-cache:
+    description: 'Cache Golang dependencies'
+    required: false
+    default: 'true'
+  go-version-file:
+    description: 'Path to go.mod to pull go version from'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        cache: ${{ inputs.go-cache }}
+        go-version-file: ${{ inputs.go-version-file }}

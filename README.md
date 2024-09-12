@@ -19,10 +19,10 @@ import (
 
 func verifyAttestation(attestation []byte) error {
 	res, err := nitrite.Verify(
-		bytes.NewReader(attestation),
-		nitrite.VerifyOptions{
-			CurrentTime: time.Now(),
-		})
+		attestation,
+		nitrite.MakeNitroCertProvider(),
+		nitrite.WithAttestationTime(),
+	)
 
 	if nil != err {
 		return err
@@ -41,8 +41,9 @@ Alternatively, you can supply your own copy of the root CA.
 
 ## License
 
-Copyright &copy; 2021 Stojan Dimitrovski. Licensed under the MIT License. See
-`LICENSE` for more information.
+Copyright &copy; 2021 Stojan Dimitrovski
+Copyright &copy; 2024 BLOCKY, Inc.
+Licensed under the MIT License. See `LICENSE` for more information.
 
 [go-reportcard-badge]: https://goreportcard.com/badge/github.com/blocky/nitrite
 [go-reportcard]: https://goreportcard.com/report/github.com/blocky/nitrite

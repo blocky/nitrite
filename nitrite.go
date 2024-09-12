@@ -13,17 +13,9 @@ import (
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
+
+	"github.com/blocky/nitrite/internal"
 )
-
-// asserts/aws_nitro_enclaves.crt contains the PEM encoded roots for verifying Nitro
-//	Enclave attestation signatures. You can download them from
-//	https://aws-nitro-enclaves.amazonaws.com/AWS_NitroEnclaves_Root-G1.zip
-//	It's recommended you calculate the SHA256 sum of this string and match
-//	it to the one supplied in the AWS documentation
-//	https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html
-
-//go:embed assets/aws_nitro_enclaves.crt
-var AWSNitroEnclavesCertPEM []byte
 
 // Document represents the AWS Nitro Enclave Attestation Document.
 type Document struct {
@@ -37,6 +29,28 @@ type Document struct {
 	PublicKey []byte `cbor:"public_key" json:"public_key,omitempty"`
 	UserData  []byte `cbor:"user_data" json:"user_data,omitempty"`
 	Nonce     []byte `cbor:"nonce" json:"nonce,omitempty"`
+}
+
+func (d Document) CreatedAt() time.Time {
+	if d.Timestamp == 0 {
+		return time.Time{}
+	}
+
+	// Pg. 64 of https://docs.aws.amazon.com/pdfs/enclaves/latest/user/enclaves-user.pdf
+	// describes Timestamp as "UTC time when document was created, in milliseconds".
+	// On the other, self-signed attestation timestamps are in seconds, so
+	// we need to figure out which time of timestamp to convert.
+	// TODO: Remove this check and use UnixMilli as part of
+	//  https://blocky.atlassian.net/browse/BKY-5620
+
+	var createdAt time.Time
+	if time.UnixMilli(int64(d.Timestamp)).Year() < 1980 {
+		createdAt = time.Unix(int64(d.Timestamp), 0)
+	} else {
+		createdAt = time.UnixMilli(int64(d.Timestamp))
+	}
+
+	return createdAt
 }
 
 // Result is a successful verification result of an attestation payload.
@@ -65,16 +79,6 @@ type Result struct {
 	COSESign1 []byte `json:"cose_sign1,omitempty"`
 }
 
-// VerifyOptions specifies the options for verifying the attestation payload.
-// If `Roots` is nil, the `DefaultCARoot` is used. If `CurrentTime` is 0,
-// `time.Now()` will be used. It is a strong recommendation you explicitly
-// supply this value.
-type VerifyOptions struct {
-	Roots               *x509.CertPool
-	CurrentTime         time.Time
-	AllowSelfSignedCert bool
-}
-
 type CoseHeader struct {
 	Alg interface{} `cbor:"1,keyasint,omitempty" json:"alg,omitempty"`
 }
@@ -97,7 +101,7 @@ func (h *CoseHeader) AlgorithmInt() (int64, bool) {
 	return 0, false
 }
 
-type CosePayload struct {
+type cosePayload struct {
 	_ struct{} `cbor:",toarray"`
 
 	Protected   []byte
@@ -167,20 +171,26 @@ var (
 	ErrMarshallingCoseSignature         error = errors.New("Could not marshal COSE signature")
 )
 
-var (
-	defaultRoot *x509.CertPool = createAWSNitroRoot()
-)
+type VerificationTimeFunc func(Document) time.Time
 
-func createAWSNitroRoot() *x509.CertPool {
-	pool := x509.NewCertPool()
-
-	ok := pool.AppendCertsFromPEM(AWSNitroEnclavesCertPEM)
-	if !ok {
-		return nil
+func WithTime(t time.Time) VerificationTimeFunc {
+	return func(_ Document) time.Time {
+		return t
 	}
-
-	return pool
 }
+
+func WithAttestationTime() VerificationTimeFunc {
+	return func(doc Document) time.Time {
+		return doc.CreatedAt()
+	}
+}
+
+type CertProvider interface {
+	Roots() (*x509.CertPool, error)
+}
+
+var NewNitroCertProvider = internal.NewNitroCertProvider
+var NewSelfSignedCertProvider = internal.NewSelfSignedCertProvider
 
 // Verify verifies the attestation payload from `data` with the provided
 // verification options. If the options specify `Roots` as `nil`, the
@@ -196,10 +206,17 @@ func createAWSNitroRoot() *x509.CertPool {
 // is not OK or certificate can't be verified, both Result and error will be
 // set! You can use the SignatureOK field from the result to distinguish
 // errors.
-func Verify(data []byte, options VerifyOptions) (*Result, error) {
-	cose := CosePayload{}
+func Verify(
+	attestation []byte,
+	certProvider CertProvider,
+	verificationTime VerificationTimeFunc,
+) (
+	*Result,
+	error,
+) {
+	cose := cosePayload{}
 
-	err := cbor.Unmarshal(data, &cose)
+	err := cbor.Unmarshal(attestation, &cose)
 	if nil != err {
 		return nil, ErrBadCOSESign1Structure
 	}
@@ -264,7 +281,14 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		return nil, ErrMandatoryFieldsMissing
 	}
 
-	if !options.AllowSelfSignedCert && nil == doc.CABundle {
+	cert, err := x509.ParseCertificate(doc.Certificate)
+	if nil != err {
+		return nil, err
+	}
+
+	// TODO: remove the support for self-signed attestations as part of
+	//  https://blocky.atlassian.net/browse/BKY-5620 (remove !cert.IsCA path)
+	if !cert.IsCA && nil == doc.CABundle {
 		return nil, ErrMandatoryFieldsMissing
 	}
 
@@ -294,11 +318,11 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	if !options.AllowSelfSignedCert && len(doc.CABundle) < 1 {
+	if !cert.IsCA && len(doc.CABundle) < 1 {
 		return nil, ErrBadCABundle
 	}
 
-	if !options.AllowSelfSignedCert {
+	if !cert.IsCA {
 		for _, item := range doc.CABundle {
 			if nil == item || len(item) < 1 || len(item) > 1024 {
 				return nil, ErrBadCABundleItem
@@ -317,15 +341,10 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 	}
 
 	var certificates []*x509.Certificate
-	if !options.AllowSelfSignedCert {
+	if !cert.IsCA {
 		certificates = make([]*x509.Certificate, 0, len(doc.CABundle)+1)
 	} else {
 		certificates = make([]*x509.Certificate, 1)
-	}
-
-	cert, err := x509.ParseCertificate(doc.Certificate)
-	if nil != err {
-		return nil, err
 	}
 
 	if x509.ECDSA != cert.PublicKeyAlgorithm {
@@ -340,7 +359,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 
 	intermediates := x509.NewCertPool()
 
-	if !options.AllowSelfSignedCert {
+	if !cert.IsCA {
 		for _, item := range doc.CABundle {
 			cert, err := x509.ParseCertificate(item)
 			if nil != err {
@@ -352,31 +371,27 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		}
 	}
 
-	roots := options.Roots
-	if nil == roots {
-		roots = defaultRoot
-	}
-	if cert.IsCA {
-		roots.AddCert(cert)
+	if verificationTime(doc).IsZero() {
+		return nil, fmt.Errorf("verification time is 0")
 	}
 
-	currentTime := options.CurrentTime
-	if currentTime.IsZero() {
-		currentTime = time.Now()
+	roots, err := certProvider.Roots()
+	if nil != err {
+		return nil, fmt.Errorf("getting root certificates: %w", err)
 	}
 
 	_, err = cert.Verify(
 		x509.VerifyOptions{
 			Intermediates: intermediates,
 			Roots:         roots,
-			CurrentTime:   currentTime,
+			CurrentTime:   verificationTime(doc),
 			KeyUsages: []x509.ExtKeyUsage{
 				x509.ExtKeyUsageAny,
 			},
 		},
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("verifying certificate: %w", err)
 	}
 
 	coseSig := coseSignature{
@@ -397,7 +412,7 @@ func Verify(data []byte, options VerifyOptions) (*Result, error) {
 		cose.Signature,
 	)
 
-	if !signatureOk && nil == err {
+	if !signatureOk {
 		err = ErrBadSignature
 	}
 
@@ -458,29 +473,4 @@ func checkECDSASignature(
 	s = s.SetBytes(signature[len(hashSigStruct):])
 
 	return ecdsa.Verify(publicKey, hashSigStruct, r, s)
-}
-
-func NewDocumentFromCosePayloadBytes(bytes []byte) (*Document, error) {
-	cose := CosePayload{}
-	err := cbor.Unmarshal(bytes, &cose)
-	if nil != err {
-		return nil, fmt.Errorf("unmarshaling CosePayload: %w", err)
-	}
-
-	doc := Document{}
-	err = cbor.Unmarshal(cose.Payload, &doc)
-	if nil != err {
-		return nil, fmt.Errorf("unmarshaling Document: %w", err)
-	}
-	return &doc, nil
-}
-
-func (d *Document) CreatedAt() time.Time {
-	if d.Timestamp == 0 {
-		return time.Time{}
-	}
-
-	// Pg. 64 of https://docs.aws.amazon.com/pdfs/enclaves/latest/user/enclaves-user.pdf
-	// describes Timestamp as "UTC time when document was created, in milliseconds"
-	return time.UnixMilli(int64(d.Timestamp))
 }

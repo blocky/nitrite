@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/blocky/nitrite"
 )
@@ -23,17 +22,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	document, err := base64.StdEncoding.DecodeString(*fDocument)
+	attestationBytes, err := base64.StdEncoding.DecodeString(*fDocument)
 	if nil != err {
-		fmt.Printf("Provided attestation document is not encoded as a valid standard Base64 string\n")
+		fmt.Println(
+			"Provided attestation is not encoded as a valid, " +
+				"standard Base64 string",
+		)
 		os.Exit(2)
 	}
 
 	res, err := nitrite.Verify(
-		document,
-		nitrite.VerifyOptions{
-			CurrentTime: time.Now(),
-		},
+		attestationBytes,
+		nitrite.NewNitroCertProvider(),
+		nitrite.WithAttestationTime(),
 	)
 
 	resJSON := ""
