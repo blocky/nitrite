@@ -31,7 +31,6 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 		cp := internal.NewNitroCertProvider()
 		// when
 		gotRoots, err := cp.Roots()
-		gotRoots, err = cp.Roots()
 
 		// then
 		require.NoError(t, err)
