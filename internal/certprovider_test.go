@@ -12,15 +12,26 @@ import (
 )
 
 func TestNitroCertProvider_Interfaces(t *testing.T) {
-	var _ nitrite.CertProvider = internal.MakeNitroCertProvider()
+	var _ nitrite.CertProvider = internal.NewNitroCertProvider()
+}
+
+func TestNewNitroCertProvider(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		// when
+		cp := internal.NewNitroCertProvider()
+
+		// then
+		require.NotNil(t, cp)
+	})
 }
 
 func TestNitroCertProvider_Roots(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		// given
-		cp := internal.MakeNitroCertProvider()
+		cp := internal.NewNitroCertProvider()
 		// when
 		gotRoots, err := cp.Roots()
+		gotRoots, err = cp.Roots()
 
 		// then
 		require.NoError(t, err)
@@ -38,7 +49,7 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 	for _, tt := range errorTests {
 		t.Run("cannot append "+tt.name+" cert", func(t *testing.T) {
 			// given
-			cp := internal.MakeNitroCertProvider()
+			cp := internal.NewNitroCertProvider()
 
 			// when
 			_, err := cp.RootsWithCerts(tt.derCert)
@@ -50,13 +61,23 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 }
 
 func TestSelfSignedCertProvider_Interfaces(t *testing.T) {
-	var _ nitrite.CertProvider = internal.MakeSelfSignedCertProvider()
+	var _ nitrite.CertProvider = internal.NewSelfSignedCertProvider()
+}
+
+func TestNewSelfSignedCertProvider(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		// when
+		cp := internal.NewSelfSignedCertProvider()
+
+		// then
+		require.NotNil(t, cp)
+	})
 }
 
 func TestSelfSignedCertProvider_Roots(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		// given
-		cp := internal.MakeSelfSignedCertProvider()
+		cp := internal.NewSelfSignedCertProvider()
 
 		// when
 		gotRoots, err := cp.Roots()
@@ -77,7 +98,7 @@ func TestSelfSignedCertProvider_Roots(t *testing.T) {
 	for _, tt := range errorTests {
 		t.Run("cannot append "+tt.name+" cert", func(t *testing.T) {
 			// given
-			cp := internal.MakeSelfSignedCertProvider()
+			cp := internal.NewSelfSignedCertProvider()
 
 			// when
 			_, err := cp.RootWithCert(tt.derCert)

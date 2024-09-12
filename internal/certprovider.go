@@ -20,17 +20,27 @@ var NitroCertPEM []byte
 //go:embed assets/selfsigned_cert.der
 var selfSignedCertDER []byte
 
-type NitroCertProvider struct{}
-
-func MakeNitroCertProvider() NitroCertProvider {
-	return NitroCertProvider{}
+type NitroCertProvider struct {
+	certs *x509.CertPool
 }
 
-func (cp NitroCertProvider) Roots() (*x509.CertPool, error) {
-	return cp.RootsWithCerts(NitroCertPEM)
+func NewNitroCertProvider() *NitroCertProvider {
+	return &NitroCertProvider{}
 }
 
-func (cp NitroCertProvider) RootsWithCerts(
+func (cp *NitroCertProvider) Roots() (*x509.CertPool, error) {
+	if cp.certs == nil {
+		certs, err := cp.RootsWithCerts(NitroCertPEM)
+		if err != nil {
+			return nil, err
+		}
+		cp.certs = certs
+	}
+
+	return cp.certs, nil
+}
+
+func (_ *NitroCertProvider) RootsWithCerts(
 	pemCerts []byte,
 ) (
 	*x509.CertPool,
@@ -44,17 +54,27 @@ func (cp NitroCertProvider) RootsWithCerts(
 	return certs, nil
 }
 
-type SelfSignedCertProvider struct{}
-
-func MakeSelfSignedCertProvider() SelfSignedCertProvider {
-	return SelfSignedCertProvider{}
+type SelfSignedCertProvider struct {
+	certs *x509.CertPool
 }
 
-func (cp SelfSignedCertProvider) Roots() (*x509.CertPool, error) {
-	return cp.RootWithCert(selfSignedCertDER)
+func NewSelfSignedCertProvider() *SelfSignedCertProvider {
+	return &SelfSignedCertProvider{}
 }
 
-func (cp SelfSignedCertProvider) RootWithCert(
+func (cp *SelfSignedCertProvider) Roots() (*x509.CertPool, error) {
+	if cp.certs == nil {
+		certs, err := cp.RootWithCert(selfSignedCertDER)
+		if err != nil {
+			return nil, err
+		}
+		cp.certs = certs
+	}
+
+	return cp.certs, nil
+}
+
+func (_ *SelfSignedCertProvider) RootWithCert(
 	derCert []byte,
 ) (
 	*x509.CertPool,

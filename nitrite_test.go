@@ -46,17 +46,17 @@ func TestNitrite_Verify(t *testing.T) {
 		"nitro": {
 			attestation:  nitroAttestation,
 			time:         nitroAttestationTime,
-			certProvider: nitrite.MakeNitroCertProvider(),
+			certProvider: nitrite.NewNitroCertProvider(),
 		},
 		"debug": {
 			attestation:  debugNitroAttestation,
 			time:         debugNitroAttestationTime,
-			certProvider: nitrite.MakeNitroCertProvider(),
+			certProvider: nitrite.NewNitroCertProvider(),
 		},
 		"self-signed": {
 			attestation:  selfSignedAttestation,
 			time:         selfSignedAttestationTime,
-			certProvider: nitrite.MakeSelfSignedCertProvider(),
+			certProvider: nitrite.NewSelfSignedCertProvider(),
 		},
 	}
 
