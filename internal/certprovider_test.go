@@ -49,6 +49,24 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 	}
 }
 
+func TestFetchingNitroCertProvider_Interfaces(t *testing.T) {
+	var _ nitrite.CertProvider = internal.MakeFetchingNitroCertProvider()
+}
+
+func TestFetchingNitroCertProvider_Roots(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		// given
+		cp := internal.MakeFetchingNitroCertProvider()
+
+		// when
+		gotRoots, err := cp.Roots()
+
+		// then
+		require.NoError(t, err)
+		assert.False(t, gotRoots.Equal(x509.NewCertPool())) // check not empty
+	})
+}
+
 func TestSelfSignedCertProvider_Interfaces(t *testing.T) {
 	var _ nitrite.CertProvider = internal.MakeSelfSignedCertProvider()
 }
