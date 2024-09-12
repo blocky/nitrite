@@ -8,7 +8,11 @@ lint: tidy
 
 .PHONY: test-unit
 test-unit: tidy
-	@go test ./...
+	@go test -short ./...
+
+.PHONY: test-integration
+test-integration: tidy
+	@go test -v -tags=integration ./test/integration/...
 
 .PHONY: test-main
 test-main: tidy
