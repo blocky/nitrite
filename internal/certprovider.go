@@ -76,7 +76,7 @@ func (cp *NitroCertProvider) Roots() (*x509.CertPool, error) {
 			UnzipRoots,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("creating certs: %w", err)
 		}
 		cp.certs = certs
 	}
@@ -99,33 +99,40 @@ func (_ *NitroCertProvider) RootsWithCerts(
 			fmt.Errorf("digest mismatch: %s != %s", digestHex, rootsDigestHex)
 	}
 
-	rootsPEM, err := unzipRoots(rootsZIPBytes)
+	pemCerts, err := unzipRoots(rootsZIPBytes)
 	if err != nil {
 		return nil, fmt.Errorf("unzipping roots: %w", err)
 	}
 
 	certs := x509.NewCertPool()
-	ok := certs.AppendCertsFromPEM(rootsPEM)
+	ok := certs.AppendCertsFromPEM(pemCerts)
 	if !ok {
 		return nil, fmt.Errorf("appending cert")
 	}
 	return certs, nil
 }
 
-// todo: add a thing to make sure we have the latest
-// todo: decide what to do in main
-
 type FetchingNitroCertProvider struct {
-	certs *x509.CertPool
+	httpClient *http.Client
+	certs      *x509.CertPool
 }
 
 func NewFetchingNitroCertProvider() *FetchingNitroCertProvider {
-	return &FetchingNitroCertProvider{}
+	return NewFetchingNitroCertProviderWithClient(http.DefaultClient)
+}
+
+func NewFetchingNitroCertProviderWithClient(
+	client *http.Client,
+) *FetchingNitroCertProvider {
+	return &FetchingNitroCertProvider{
+		certs:      nil,
+		httpClient: client,
+	}
 }
 
 func (cp FetchingNitroCertProvider) Roots() (*x509.CertPool, error) {
 	if cp.certs == nil {
-		resp, err := http.Get(AWSNitroEnclavesRootURL)
+		resp, err := cp.httpClient.Get(AWSNitroEnclavesRootURL)
 		if err != nil {
 			return nil, fmt.Errorf("fetching root file: %w", err)
 		}
@@ -142,7 +149,7 @@ func (cp FetchingNitroCertProvider) Roots() (*x509.CertPool, error) {
 			UnzipRoots,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("creating certs: %w", err)
 		}
 
 		cp.certs = certs
@@ -150,6 +157,9 @@ func (cp FetchingNitroCertProvider) Roots() (*x509.CertPool, error) {
 
 	return cp.certs, nil
 }
+
+// TODO: Remove SelfSignedCertProvider as part of
+//  https://blocky.atlassian.net/browse/BKY-5620
 
 //go:embed assets/selfsigned_cert.der
 var selfSignedCertDER []byte

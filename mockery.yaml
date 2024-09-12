@@ -6,4 +6,10 @@ packages:
   github.com/blocky/nitrite:
     interfaces:
       CertProvider:
+  github.com/blocky/nitrite/internal:
+    interfaces:
+      UnzipRootsFunc:
+  net/http:
+    interfaces:
+      RoundTripper:
 
