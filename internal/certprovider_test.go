@@ -17,6 +17,20 @@ import (
 	"github.com/blocky/nitrite/mocks"
 )
 
+func TestUnzipRoots(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		// given
+		zipped := internal.AWSNitroEnclavesRootZip
+
+		// when
+		unzipped, err := internal.UnzipRoots(zipped)
+
+		// then
+		require.NoError(t, err)
+		assert.NotEmpty(t, unzipped)
+	})
+}
+
 func TestNitroCertProvider_Interfaces(t *testing.T) {
 	var _ nitrite.CertProvider = internal.NewNitroCertProvider()
 }
