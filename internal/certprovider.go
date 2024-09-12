@@ -14,11 +14,7 @@ import (
 	"strings"
 )
 
-// asserts/aws_nitro_enclaves.crt contains the PEM encoded roots for verifying Nitro
-//	Enclave attestation signatures. You can download them from
-//	https://aws-nitro-enclaves.amazonaws.com/AWS_NitroEnclaves_Root-G1.zip
-//	It's recommended you calculate the SHA256 sum of this string and match
-//	it to the one supplied in the AWS documentation
+// AWS_NitroEnclaves_Root-G1.zip file and its digest are advertised on
 //	https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html
 
 const AWSNitroEnclavesRootURL = "https://aws-nitro-enclaves.amazonaws.com/AWS_NitroEnclaves_Root-G1.zip"
