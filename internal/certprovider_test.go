@@ -29,6 +29,24 @@ func TestUnzipAWSRootCerts(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEmpty(t, unzipped)
 	})
+
+	errorTests := []struct {
+		name   string
+		zipped []byte
+	}{
+		{"empty", []byte{}},
+		{"nil", nil},
+		{"invalid", []byte("invalid zip bytes")},
+	}
+	for _, tt := range errorTests {
+		t.Run("cannot unzip "+tt.name+" zip", func(t *testing.T) {
+			// when
+			_, err := internal.UnzipAWSRootCerts(tt.zipped)
+
+			// then
+			assert.Error(t, err)
+		})
+	}
 }
 
 func TestExtractRoots(t *testing.T) {
