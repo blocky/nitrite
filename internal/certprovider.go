@@ -25,9 +25,9 @@ var AWSNitroEnclavesRootZip []byte
 //go:embed assets/AWS_NitroEnclaves_Root-G1.sha256.hex
 var AWSNitroEnclavesRootSHA256Hex string
 
-type UnzipRootsFunc func(zipBytes []byte) (pemBytes []byte, err error)
+type UnzipAWSRootCertsFunc func(zipBytes []byte) (pemBytes []byte, err error)
 
-func UnzipRoots(zipBytes []byte) ([]byte, error) {
+func UnzipAWSRootCerts(zipBytes []byte) ([]byte, error) {
 	zipReader, err := zip.NewReader(
 		bytes.NewReader(zipBytes),
 		int64(len(zipBytes)),
@@ -56,34 +56,19 @@ func UnzipRoots(zipBytes []byte) ([]byte, error) {
 	return pemBytes, nil
 }
 
-type NitroCertProvider struct {
-	certs *x509.CertPool
-}
-
-func NewNitroCertProvider() *NitroCertProvider {
-	return &NitroCertProvider{}
-}
-
-func (cp *NitroCertProvider) Roots() (*x509.CertPool, error) {
-	if cp.certs == nil {
-		certs, err := cp.RootsWithCerts(
-			AWSNitroEnclavesRootZip,
-			AWSNitroEnclavesRootSHA256Hex,
-			UnzipRoots,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("creating certs: %w", err)
-		}
-		cp.certs = certs
-	}
-
-	return cp.certs, nil
-}
-
-func (_ *NitroCertProvider) RootsWithCerts(
+type ExtractRootsFunc func(
 	rootsZIPBytes []byte,
 	rootsDigestHex string,
-	unzipRoots UnzipRootsFunc,
+	unzipAWSRootCerts UnzipAWSRootCertsFunc,
+) (
+	*x509.CertPool,
+	error,
+)
+
+func ExtractRoots(
+	rootsZIPBytes []byte,
+	rootsDigestHex string,
+	unzipAWSRootCerts UnzipAWSRootCertsFunc,
 ) (
 	*x509.CertPool,
 	error,
@@ -95,40 +80,64 @@ func (_ *NitroCertProvider) RootsWithCerts(
 			fmt.Errorf("digest mismatch: %s != %s", digestHex, rootsDigestHex)
 	}
 
-	pemCerts, err := unzipRoots(rootsZIPBytes)
+	rootCertsPEM, err := unzipAWSRootCerts(rootsZIPBytes)
 	if err != nil {
 		return nil, fmt.Errorf("unzipping roots: %w", err)
 	}
 
-	certs := x509.NewCertPool()
-	ok := certs.AppendCertsFromPEM(pemCerts)
+	roots := x509.NewCertPool()
+	ok := roots.AppendCertsFromPEM(rootCertsPEM)
 	if !ok {
 		return nil, fmt.Errorf("appending cert")
 	}
-	return certs, nil
+	return roots, nil
 }
 
-type FetchingNitroCertProvider struct {
-	httpClient *http.Client
-	certs      *x509.CertPool
+type NitroCertProvider struct {
+	RootCerts    *x509.CertPool
+	ExtractRoots ExtractRootsFunc
 }
 
-func NewFetchingNitroCertProvider() *FetchingNitroCertProvider {
-	return NewFetchingNitroCertProviderWithClient(http.DefaultClient)
-}
-
-func NewFetchingNitroCertProviderWithClient(
-	client *http.Client,
-) *FetchingNitroCertProvider {
-	return &FetchingNitroCertProvider{
-		certs:      nil,
-		httpClient: client,
+func NewNitroCertProvider() *NitroCertProvider {
+	return &NitroCertProvider{
+		RootCerts:    nil,
+		ExtractRoots: ExtractRoots,
 	}
 }
 
-func (cp FetchingNitroCertProvider) Roots() (*x509.CertPool, error) {
-	if cp.certs == nil {
-		resp, err := cp.httpClient.Get(AWSNitroEnclavesRootURL)
+func (cp *NitroCertProvider) Roots() (*x509.CertPool, error) {
+	if cp.RootCerts == nil {
+		certs, err := cp.ExtractRoots(
+			AWSNitroEnclavesRootZip,
+			AWSNitroEnclavesRootSHA256Hex,
+			UnzipAWSRootCerts,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("extracting roots: %w", err)
+		}
+		cp.RootCerts = certs
+	}
+
+	return cp.RootCerts, nil
+}
+
+type FetchingNitroCertProvider struct {
+	HTTPClient   *http.Client
+	RootCerts    *x509.CertPool
+	ExtractRoots ExtractRootsFunc
+}
+
+func NewFetchingNitroCertProvider() *FetchingNitroCertProvider {
+	return &FetchingNitroCertProvider{
+		RootCerts:    nil,
+		HTTPClient:   http.DefaultClient,
+		ExtractRoots: ExtractRoots,
+	}
+}
+
+func (cp *FetchingNitroCertProvider) Roots() (*x509.CertPool, error) {
+	if cp.RootCerts == nil {
+		resp, err := cp.HTTPClient.Get(AWSNitroEnclavesRootURL)
 		if err != nil {
 			return nil, fmt.Errorf("fetching root file: %w", err)
 		}
@@ -139,19 +148,19 @@ func (cp FetchingNitroCertProvider) Roots() (*x509.CertPool, error) {
 			return nil, fmt.Errorf("reading ZIP bytes: %w", err)
 		}
 
-		certs, err := NewNitroCertProvider().RootsWithCerts(
+		certs, err := cp.ExtractRoots(
 			zipBytes,
 			AWSNitroEnclavesRootSHA256Hex,
-			UnzipRoots,
+			UnzipAWSRootCerts,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("creating certs: %w", err)
+			return nil, fmt.Errorf("creating roots: %w", err)
 		}
 
-		cp.certs = certs
+		cp.RootCerts = certs
 	}
 
-	return cp.certs, nil
+	return cp.RootCerts, nil
 }
 
 // TODO: Remove SelfSignedCertProvider as part of
