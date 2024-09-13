@@ -106,17 +106,20 @@ func NewNitroCertProvider() *NitroCertProvider {
 }
 
 func (cp *NitroCertProvider) Roots() (*x509.CertPool, error) {
-	if cp.RootCerts == nil {
-		certs, err := cp.ExtractRoots(
-			AWSNitroEnclavesRootZip,
-			AWSNitroEnclavesRootSHA256Hex,
-			UnzipAWSRootCerts,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("extracting roots: %w", err)
-		}
-		cp.RootCerts = certs
+	if nil != cp.RootCerts {
+		return cp.RootCerts, nil
 	}
+
+	certs, err := cp.ExtractRoots(
+		AWSNitroEnclavesRootZip,
+		AWSNitroEnclavesRootSHA256Hex,
+		UnzipAWSRootCerts,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("extracting roots: %w", err)
+	}
+
+	cp.RootCerts = certs
 
 	return cp.RootCerts, nil
 }
@@ -136,29 +139,31 @@ func NewFetchingNitroCertProvider() *FetchingNitroCertProvider {
 }
 
 func (cp *FetchingNitroCertProvider) Roots() (*x509.CertPool, error) {
-	if cp.RootCerts == nil {
-		resp, err := cp.HTTPClient.Get(AWSNitroEnclavesRootURL)
-		if err != nil {
-			return nil, fmt.Errorf("fetching root file: %w", err)
-		}
-		defer resp.Body.Close()
-
-		zipBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("reading ZIP bytes: %w", err)
-		}
-
-		certs, err := cp.ExtractRoots(
-			zipBytes,
-			AWSNitroEnclavesRootSHA256Hex,
-			UnzipAWSRootCerts,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("creating roots: %w", err)
-		}
-
-		cp.RootCerts = certs
+	if nil != cp.RootCerts {
+		return cp.RootCerts, nil
 	}
+
+	resp, err := cp.HTTPClient.Get(AWSNitroEnclavesRootURL)
+	if err != nil {
+		return nil, fmt.Errorf("fetching root file: %w", err)
+	}
+	defer resp.Body.Close()
+
+	zipBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading ZIP bytes: %w", err)
+	}
+
+	certs, err := cp.ExtractRoots(
+		zipBytes,
+		AWSNitroEnclavesRootSHA256Hex,
+		UnzipAWSRootCerts,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating roots: %w", err)
+	}
+
+	cp.RootCerts = certs
 
 	return cp.RootCerts, nil
 }
@@ -170,7 +175,7 @@ func (cp *FetchingNitroCertProvider) Roots() (*x509.CertPool, error) {
 var selfSignedCertDER []byte
 
 type SelfSignedCertProvider struct {
-	certs *x509.CertPool
+	RootCerts *x509.CertPool
 }
 
 func NewSelfSignedCertProvider() *SelfSignedCertProvider {
@@ -178,15 +183,17 @@ func NewSelfSignedCertProvider() *SelfSignedCertProvider {
 }
 
 func (cp *SelfSignedCertProvider) Roots() (*x509.CertPool, error) {
-	if cp.certs == nil {
-		certs, err := cp.RootWithCert(selfSignedCertDER)
-		if err != nil {
-			return nil, err
-		}
-		cp.certs = certs
+	if nil != cp.RootCerts {
+		return cp.RootCerts, nil
 	}
 
-	return cp.certs, nil
+	certs, err := cp.RootWithCert(selfSignedCertDER)
+	if err != nil {
+		return nil, err
+	}
+	cp.RootCerts = certs
+
+	return cp.RootCerts, nil
 }
 
 func (_ *SelfSignedCertProvider) RootWithCert(
