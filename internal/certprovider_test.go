@@ -1,9 +1,7 @@
 package internal_test
 
 import (
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/hex"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -46,80 +44,6 @@ func TestUnzipAWSRootCerts(t *testing.T) {
 
 			// then
 			assert.Error(t, err)
-		})
-	}
-}
-
-func TestExtractRoots(t *testing.T) {
-	t.Run("happy path", func(t *testing.T) {
-		// when
-		gotRoots, err := internal.ExtractRoots(
-			internal.AWSNitroEnclavesRootZip,
-			internal.AWSNitroEnclavesRootSHA256Hex,
-			internal.UnzipAWSRootCerts,
-		)
-
-		// then
-		require.NoError(t, err)
-		assert.False(t, gotRoots.Equal(x509.NewCertPool())) // check not empty
-	})
-
-	t.Run("incorrect roots digest", func(t *testing.T) {
-		// when
-		_, err := internal.ExtractRoots(
-			internal.AWSNitroEnclavesRootZip,
-			"invalid digest",
-			internal.UnzipAWSRootCerts,
-		)
-
-		// then
-		assert.ErrorContains(t, err, "digest mismatch")
-	})
-
-	t.Run("cannot unzip root", func(t *testing.T) {
-		// given
-		zipBytes := []byte("invalid zip bytes")
-		zipBytesDigest := sha256.Sum256(zipBytes)
-		zipBytesDigestHex := hex.EncodeToString(zipBytesDigest[:])
-
-		// when
-		_, err := internal.ExtractRoots(
-			zipBytes,
-			zipBytesDigestHex,
-			internal.UnzipAWSRootCerts,
-		)
-
-		// then
-		assert.ErrorContains(t, err, "unzipping roots")
-	})
-
-	appendCertErrorTests := []struct {
-		name    string
-		pemCert []byte
-	}{
-		{"empty", []byte{}},
-		{"invalid", []byte("invalid PEM bytes")},
-		{"nil", nil},
-	}
-	for _, tt := range appendCertErrorTests {
-		t.Run("cannot append "+tt.name+" PEM cert", func(t *testing.T) {
-			// given
-			unzipRoots := mocks.NewInternalUnzipAWSRootCertsFunc(t)
-
-			// expecting
-			unzipRoots.EXPECT().
-				Execute(mock.Anything).
-				Return(tt.pemCert, nil)
-
-			// when
-			_, err := internal.ExtractRoots(
-				internal.AWSNitroEnclavesRootZip,
-				internal.AWSNitroEnclavesRootSHA256Hex,
-				unzipRoots.Execute,
-			)
-
-			// then
-			assert.ErrorContains(t, err, "appending cert")
 		})
 	}
 }
@@ -187,7 +111,6 @@ func TestNewNitroCertProvider(t *testing.T) {
 		// then
 		// todo: check these
 		require.Nil(t, cp.RootCerts)
-		require.NotNil(t, cp.ExtractRoots)
 	})
 }
 
@@ -226,27 +149,74 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 		assert.Nil(t, cp.RootCerts)
 	})
 
-	t.Run("cannot extract roots", func(t *testing.T) {
+	t.Run("digest mismatch", func(t *testing.T) {
 		// given
+		rc := mocks.NewIoReadCloser(t)
+		cp := internal.NewNitroCertProvider(rc)
+
+		// expecting
+		rc.EXPECT().Read(mock.Anything).Return(0, io.EOF)
+		rc.EXPECT().Close().Return(nil)
+
+		// when
+		_, err := cp.Roots()
+
+		// then
+		assert.ErrorContains(t, err, "digest mismatch")
+		assert.Nil(t, cp.RootCerts)
+	})
+
+	t.Run("cannot unzip root certs", func(t *testing.T) {
+		// given
+		unzipRoots := mocks.NewInternalUnzipAWSRootCertsFunc(t)
 		cp := internal.NewNitroCertProvider(
 			internal.NewEmbeddedRootCertZipReader(),
 		)
-		extractRootCerts := mocks.NewInternalExtractRootsFunc(t)
-		cp.ExtractRoots = extractRootCerts.Execute
+		cp.UnzipAWSRootCerts = unzipRoots.Execute
 
 		// expecting
-		extractRootCerts.EXPECT().
-			Execute(mock.Anything, mock.Anything, mock.Anything).
+		unzipRoots.EXPECT().
+			Execute(mock.Anything).
 			Return(nil, assert.AnError)
 
 		// when
 		_, err := cp.Roots()
 
 		// then
-		assert.ErrorIs(t, err, assert.AnError)
-		assert.ErrorContains(t, err, "extracting roots")
+		assert.ErrorContains(t, err, "unzipping roots")
 		assert.Nil(t, cp.RootCerts)
 	})
+
+	appendCertErrorTests := []struct {
+		name    string
+		pemCert []byte
+	}{
+		{"empty", []byte{}},
+		{"invalid", []byte("invalid PEM bytes")},
+		{"nil", nil},
+	}
+	for _, tt := range appendCertErrorTests {
+		t.Run("cannot append "+tt.name+" cert", func(t *testing.T) {
+			// given
+			unzipRoots := mocks.NewInternalUnzipAWSRootCertsFunc(t)
+			cp := internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			)
+			cp.UnzipAWSRootCerts = unzipRoots.Execute
+
+			// expecting
+			unzipRoots.EXPECT().
+				Execute(mock.Anything).
+				Return(tt.pemCert, nil)
+
+			// when
+			_, err := cp.Roots()
+
+			// then
+			assert.ErrorContains(t, err, "appending cert")
+			assert.Nil(t, cp.RootCerts)
+		})
+	}
 }
 
 func TestSelfSignedCertProvider_Interfaces(t *testing.T) {

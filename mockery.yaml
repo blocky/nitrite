@@ -9,7 +9,6 @@ packages:
   github.com/blocky/nitrite/internal:
     interfaces:
       UnzipAWSRootCertsFunc:
-      ExtractRootsFunc:
   net/http:
     interfaces:
       RoundTripper:

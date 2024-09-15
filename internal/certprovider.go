@@ -56,43 +56,6 @@ func UnzipAWSRootCerts(zipBytes []byte) ([]byte, error) {
 	return pemBytes, nil
 }
 
-type ExtractRootsFunc func(
-	rootsZIPBytes []byte,
-	rootsDigestHex string,
-	unzipAWSRootCerts UnzipAWSRootCertsFunc,
-) (
-	*x509.CertPool,
-	error,
-)
-
-func ExtractRoots(
-	rootsZIPBytes []byte,
-	rootsDigestHex string,
-	unzipAWSRootCerts UnzipAWSRootCertsFunc,
-) (
-	*x509.CertPool,
-	error,
-) {
-	digest := sha256.Sum256(rootsZIPBytes)
-	digestHex := hex.EncodeToString(digest[:])
-	if digestHex != strings.TrimSpace(rootsDigestHex) {
-		return nil,
-			fmt.Errorf("digest mismatch: %s != %s", digestHex, rootsDigestHex)
-	}
-
-	rootCertsPEM, err := unzipAWSRootCerts(rootsZIPBytes)
-	if err != nil {
-		return nil, fmt.Errorf("unzipping roots: %w", err)
-	}
-
-	roots := x509.NewCertPool()
-	ok := roots.AppendCertsFromPEM(rootCertsPEM)
-	if !ok {
-		return nil, fmt.Errorf("appending cert")
-	}
-	return roots, nil
-}
-
 func NewEmbeddedRootCertZipReader() io.ReadCloser {
 	return io.NopCloser(bytes.NewReader(AWSNitroEnclavesRootZip))
 }
@@ -118,14 +81,14 @@ func NewFetchingRootCertZipReaderWithClient(
 type NitroCertProvider struct {
 	RootCerts         *x509.CertPool
 	rootCertZipReader io.ReadCloser
-	ExtractRoots      ExtractRootsFunc
+	UnzipAWSRootCerts UnzipAWSRootCertsFunc
 }
 
 func NewNitroCertProvider(rootCertZipReader io.ReadCloser) *NitroCertProvider {
 	return &NitroCertProvider{
 		RootCerts:         nil,
 		rootCertZipReader: rootCertZipReader,
-		ExtractRoots:      ExtractRoots,
+		UnzipAWSRootCerts: UnzipAWSRootCerts,
 	}
 }
 
@@ -140,13 +103,25 @@ func (cp *NitroCertProvider) Roots() (*x509.CertPool, error) {
 		return nil, fmt.Errorf("reading ZIP bytes: %w", err)
 	}
 
-	certs, err := cp.ExtractRoots(
-		zipBytes,
-		AWSNitroEnclavesRootSHA256Hex,
-		UnzipAWSRootCerts,
-	)
+	digest := sha256.Sum256(zipBytes)
+	digestHex := hex.EncodeToString(digest[:])
+	if digestHex != strings.TrimSpace(AWSNitroEnclavesRootSHA256Hex) {
+		return nil, fmt.Errorf(
+			"digest mismatch: expected %s, got %s",
+			AWSNitroEnclavesRootSHA256Hex,
+			digestHex,
+		)
+	}
+
+	rootCertsPEM, err := cp.UnzipAWSRootCerts(zipBytes)
 	if err != nil {
-		return nil, fmt.Errorf("extracting roots: %w", err)
+		return nil, fmt.Errorf("unzipping roots: %w", err)
+	}
+
+	certs := x509.NewCertPool()
+	ok := certs.AppendCertsFromPEM(rootCertsPEM)
+	if !ok {
+		return nil, fmt.Errorf("appending cert")
 	}
 
 	cp.RootCerts = certs
