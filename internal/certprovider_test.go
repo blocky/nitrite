@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -123,16 +124,68 @@ func TestExtractRoots(t *testing.T) {
 	}
 }
 
+func TestNewEmbeddedRootCertZipReader(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		// when
+		reader := internal.NewEmbeddedRootCertZipReader()
+
+		// then
+		require.NotEmpty(t, reader)
+
+		gotData, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		assert.Equal(t, internal.AWSNitroEnclavesRootZip, gotData)
+
+		err = reader.Close()
+		require.NoError(t, err)
+	})
+}
+
+func TestNewFetchingRootCertZipReaderWithClient(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		// given
+		roundTripper := mocks.NewHttpRoundTripper(t)
+		client := http.Client{Transport: roundTripper}
+
+		// expecting
+		recorder := httptest.NewRecorder()
+		recorder.WriteHeader(http.StatusOK)
+		_, err := recorder.Write(internal.AWSNitroEnclavesRootZip)
+		require.NoError(t, err)
+		roundTripper.EXPECT().
+			RoundTrip(mock.Anything).
+			Return(recorder.Result(), nil)
+
+		// when
+		reader, err := internal.NewFetchingRootCertZipReaderWithClient(&client)
+
+		// then
+		require.NoError(t, err)
+
+		gotData, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		assert.Equal(t, internal.AWSNitroEnclavesRootZip, gotData)
+
+		err = reader.Close()
+		require.NoError(t, err)
+	})
+}
+
 func TestNitroCertProvider_Interfaces(t *testing.T) {
-	var _ nitrite.CertProvider = internal.NewNitroCertProvider()
+	var _ nitrite.CertProvider = internal.NewNitroCertProvider(
+		internal.NewEmbeddedRootCertZipReader(),
+	)
 }
 
 func TestNewNitroCertProvider(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		// when
-		cp := internal.NewNitroCertProvider()
+		cp := internal.NewNitroCertProvider(
+			internal.NewEmbeddedRootCertZipReader(),
+		)
 
 		// then
+		// todo: check these
 		require.Nil(t, cp.RootCerts)
 		require.NotNil(t, cp.ExtractRoots)
 	})
@@ -141,7 +194,9 @@ func TestNewNitroCertProvider(t *testing.T) {
 func TestNitroCertProvider_Roots(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		// given
-		cp := internal.NewNitroCertProvider()
+		cp := internal.NewNitroCertProvider(
+			internal.NewEmbeddedRootCertZipReader(),
+		)
 
 		// when
 		gotRoots, err := cp.Roots()
@@ -153,9 +208,29 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 		assert.Equal(t, gotRoots, cp.RootCerts)
 	})
 
+	t.Run("cannot read root certs", func(t *testing.T) {
+		// given
+		rc := mocks.NewIoReadCloser(t)
+		cp := internal.NewNitroCertProvider(rc)
+
+		// expecting
+		rc.EXPECT().Read(mock.Anything).Return(0, assert.AnError)
+		rc.EXPECT().Close().Return(nil)
+
+		// when
+		_, err := cp.Roots()
+
+		// then
+		assert.ErrorIs(t, err, assert.AnError)
+		assert.ErrorContains(t, err, "reading ZIP bytes")
+		assert.Nil(t, cp.RootCerts)
+	})
+
 	t.Run("cannot extract roots", func(t *testing.T) {
 		// given
-		cp := internal.NewNitroCertProvider()
+		cp := internal.NewNitroCertProvider(
+			internal.NewEmbeddedRootCertZipReader(),
+		)
 		extractRootCerts := mocks.NewInternalExtractRootsFunc(t)
 		cp.ExtractRoots = extractRootCerts.Execute
 
@@ -170,100 +245,6 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 		// then
 		assert.ErrorIs(t, err, assert.AnError)
 		assert.ErrorContains(t, err, "extracting roots")
-		assert.Nil(t, cp.RootCerts)
-	})
-}
-
-func TestFetchingNitroCertProvider_Interfaces(t *testing.T) {
-	var _ nitrite.CertProvider = internal.NewFetchingNitroCertProvider()
-}
-
-func TestNewFetchingNitroCertProvider(t *testing.T) {
-	t.Run("happy path", func(t *testing.T) {
-		// when
-		cp := internal.NewFetchingNitroCertProvider()
-
-		// then
-		require.Nil(t, cp.RootCerts)
-		require.NotNil(t, cp.ExtractRoots)
-		require.NotNil(t, cp.HTTPClient)
-	})
-}
-
-func TestFetchingNitroCertProvider_Roots(t *testing.T) {
-	t.Run("happy path", func(t *testing.T) {
-		// given
-		roundTripper := mocks.NewHttpRoundTripper(t)
-		client := http.Client{Transport: roundTripper}
-		cp := internal.NewFetchingNitroCertProvider()
-		cp.HTTPClient = &client
-
-		// expecting
-		recorder := httptest.NewRecorder()
-		recorder.WriteHeader(http.StatusOK)
-		_, err := recorder.Write(internal.AWSNitroEnclavesRootZip)
-		require.NoError(t, err)
-		roundTripper.EXPECT().
-			RoundTrip(mock.Anything).
-			Return(recorder.Result(), nil)
-
-		// when
-		gotRoots, err := cp.Roots()
-
-		// then
-		require.NoError(t, err)
-		assert.False(t, gotRoots.Equal(x509.NewCertPool())) // check not empty
-		assert.NotNil(t, cp.RootCerts)                      // cp.RootCerts got set
-		assert.Equal(t, gotRoots, cp.RootCerts)
-	})
-
-	t.Run("cannot fetch roots", func(t *testing.T) {
-		// given
-		roundTripper := mocks.NewHttpRoundTripper(t)
-		client := http.Client{Transport: roundTripper}
-		cp := internal.NewFetchingNitroCertProvider()
-		cp.HTTPClient = &client
-
-		// expecting
-		roundTripper.EXPECT().
-			RoundTrip(mock.Anything).
-			Return(nil, assert.AnError)
-
-		// when
-		_, err := cp.Roots()
-
-		// then
-		assert.ErrorIs(t, err, assert.AnError)
-		assert.ErrorContains(t, err, "fetching root file")
-	})
-
-	t.Run("cannot create roots", func(t *testing.T) {
-		// given
-		roundTripper := mocks.NewHttpRoundTripper(t)
-		client := http.Client{Transport: roundTripper}
-		cp := internal.NewFetchingNitroCertProvider()
-		cp.HTTPClient = &client
-		extractRootCerts := mocks.NewInternalExtractRootsFunc(t)
-		cp.ExtractRoots = extractRootCerts.Execute
-
-		// expecting
-		recorder := httptest.NewRecorder()
-		recorder.WriteHeader(http.StatusOK)
-		_, err := recorder.Write(internal.AWSNitroEnclavesRootZip)
-		require.NoError(t, err)
-		roundTripper.EXPECT().
-			RoundTrip(mock.Anything).
-			Return(recorder.Result(), nil)
-		extractRootCerts.EXPECT().
-			Execute(mock.Anything, mock.Anything, mock.Anything).
-			Return(nil, assert.AnError)
-
-		// when
-		_, err = cp.Roots()
-
-		// then
-		assert.ErrorIs(t, err, assert.AnError)
-		assert.ErrorContains(t, err, "creating roots")
 		assert.Nil(t, cp.RootCerts)
 	})
 }

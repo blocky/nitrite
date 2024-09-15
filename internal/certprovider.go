@@ -93,15 +93,39 @@ func ExtractRoots(
 	return roots, nil
 }
 
-type NitroCertProvider struct {
-	RootCerts    *x509.CertPool
-	ExtractRoots ExtractRootsFunc
+func NewEmbeddedRootCertZipReader() io.ReadCloser {
+	return io.NopCloser(bytes.NewReader(AWSNitroEnclavesRootZip))
 }
 
-func NewNitroCertProvider() *NitroCertProvider {
+func NewFetchingRootCertZipReader() (io.ReadCloser, error) {
+	return NewFetchingRootCertZipReaderWithClient(http.DefaultClient)
+}
+
+func NewFetchingRootCertZipReaderWithClient(
+	client *http.Client,
+) (
+	io.ReadCloser,
+	error,
+) {
+	resp, err := client.Get(AWSNitroEnclavesRootURL)
+	if err != nil {
+		return nil, fmt.Errorf("fetching root file: %w", err)
+	}
+
+	return resp.Body, nil
+}
+
+type NitroCertProvider struct {
+	RootCerts         *x509.CertPool
+	rootCertZipReader io.ReadCloser
+	ExtractRoots      ExtractRootsFunc
+}
+
+func NewNitroCertProvider(rootCertZipReader io.ReadCloser) *NitroCertProvider {
 	return &NitroCertProvider{
-		RootCerts:    nil,
-		ExtractRoots: ExtractRoots,
+		RootCerts:         nil,
+		rootCertZipReader: rootCertZipReader,
+		ExtractRoots:      ExtractRoots,
 	}
 }
 
@@ -110,46 +134,8 @@ func (cp *NitroCertProvider) Roots() (*x509.CertPool, error) {
 		return cp.RootCerts, nil
 	}
 
-	certs, err := cp.ExtractRoots(
-		AWSNitroEnclavesRootZip,
-		AWSNitroEnclavesRootSHA256Hex,
-		UnzipAWSRootCerts,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("extracting roots: %w", err)
-	}
-
-	cp.RootCerts = certs
-
-	return cp.RootCerts, nil
-}
-
-type FetchingNitroCertProvider struct {
-	HTTPClient   *http.Client
-	RootCerts    *x509.CertPool
-	ExtractRoots ExtractRootsFunc
-}
-
-func NewFetchingNitroCertProvider() *FetchingNitroCertProvider {
-	return &FetchingNitroCertProvider{
-		RootCerts:    nil,
-		HTTPClient:   http.DefaultClient,
-		ExtractRoots: ExtractRoots,
-	}
-}
-
-func (cp *FetchingNitroCertProvider) Roots() (*x509.CertPool, error) {
-	if nil != cp.RootCerts {
-		return cp.RootCerts, nil
-	}
-
-	resp, err := cp.HTTPClient.Get(AWSNitroEnclavesRootURL)
-	if err != nil {
-		return nil, fmt.Errorf("fetching root file: %w", err)
-	}
-	defer resp.Body.Close()
-
-	zipBytes, err := io.ReadAll(resp.Body)
+	zipBytes, err := io.ReadAll(cp.rootCertZipReader)
+	defer cp.rootCertZipReader.Close()
 	if err != nil {
 		return nil, fmt.Errorf("reading ZIP bytes: %w", err)
 	}
@@ -160,7 +146,7 @@ func (cp *FetchingNitroCertProvider) Roots() (*x509.CertPool, error) {
 		UnzipAWSRootCerts,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating roots: %w", err)
+		return nil, fmt.Errorf("extracting roots: %w", err)
 	}
 
 	cp.RootCerts = certs

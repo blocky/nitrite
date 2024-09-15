@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/blocky/nitrite"
 	"github.com/blocky/nitrite/internal"
 )
 
@@ -16,7 +17,8 @@ func TestFetchingNitroCertProvider_Roots(t *testing.T) {
 		}
 
 		// given
-		cp := internal.NewFetchingNitroCertProvider()
+		cp, err := nitrite.NewFetchingNitroCertProvider()
+		require.NoError(t, err)
 
 		// when
 		got, err := cp.Roots()
@@ -37,8 +39,11 @@ func TestEmbeddedAndFetchedCertsEqual(t *testing.T) {
 		}
 
 		// given
-		embeddedCP := internal.NewNitroCertProvider()
-		fetchingCP := internal.NewFetchingNitroCertProvider()
+		embeddedCP := internal.NewNitroCertProvider(
+			internal.NewEmbeddedRootCertZipReader(),
+		)
+		fetchingCP, err := nitrite.NewFetchingNitroCertProvider()
+		require.NoError(t, err)
 
 		// when
 		gotEmbeddedRoots, err := embeddedCP.Roots()

@@ -13,4 +13,7 @@ packages:
   net/http:
     interfaces:
       RoundTripper:
+  io:
+    interfaces:
+      ReadCloser:
 
