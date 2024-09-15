@@ -109,8 +109,9 @@ func TestNewNitroCertProvider(t *testing.T) {
 		)
 
 		// then
-		// todo: check these
-		require.Nil(t, cp.RootCerts)
+		assert.Nil(t, cp.RootCerts)
+		assert.NotNil(t, cp.RootCertZipReader)
+		assert.NotNil(t, cp.UnzipAWSRootCerts)
 	})
 }
 

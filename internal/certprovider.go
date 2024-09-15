@@ -80,14 +80,14 @@ func NewFetchingRootCertZipReaderWithClient(
 
 type NitroCertProvider struct {
 	RootCerts         *x509.CertPool
-	rootCertZipReader io.ReadCloser
+	RootCertZipReader io.ReadCloser
 	UnzipAWSRootCerts UnzipAWSRootCertsFunc
 }
 
 func NewNitroCertProvider(rootCertZipReader io.ReadCloser) *NitroCertProvider {
 	return &NitroCertProvider{
 		RootCerts:         nil,
-		rootCertZipReader: rootCertZipReader,
+		RootCertZipReader: rootCertZipReader,
 		UnzipAWSRootCerts: UnzipAWSRootCerts,
 	}
 }
@@ -97,8 +97,8 @@ func (cp *NitroCertProvider) Roots() (*x509.CertPool, error) {
 		return cp.RootCerts, nil
 	}
 
-	zipBytes, err := io.ReadAll(cp.rootCertZipReader)
-	defer cp.rootCertZipReader.Close()
+	zipBytes, err := io.ReadAll(cp.RootCertZipReader)
+	defer cp.RootCertZipReader.Close()
 	if err != nil {
 		return nil, fmt.Errorf("reading ZIP bytes: %w", err)
 	}
