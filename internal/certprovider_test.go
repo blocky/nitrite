@@ -132,6 +132,29 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 		assert.Equal(t, gotRoots, cp.RootCerts)
 	})
 
+	t.Run("happy path - returns cached roots", func(t *testing.T) {
+		// given
+		cp := internal.NewNitroCertProvider(
+			internal.NewEmbeddedRootCertZipReader(),
+		)
+		// first call sets the cached value
+		_, err := cp.Roots()
+		require.NoError(t, err)
+		// replace the unzip function with a mock
+		unzipRoots := mocks.NewInternalUnzipAWSRootCertsFunc(t)
+		cp.UnzipAWSRootCerts = unzipRoots.Execute
+
+		// expecting
+		// if caching works unzipRoots should never be called
+
+		// when
+		gotRoots, err := cp.Roots()
+
+		// then
+		require.NoError(t, err)
+		assert.False(t, gotRoots.Equal(x509.NewCertPool())) // check not empty
+	})
+
 	t.Run("cannot read root certs", func(t *testing.T) {
 		// given
 		rc := mocks.NewIoReadCloser(t)
