@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/blocky/nitrite"
@@ -12,7 +13,10 @@ import (
 
 var (
 	fAttestation = flag.String("attestation", "", "Attestation document in standard Base64 encoding")
+	fDebug       = flag.Bool("debug", false, "Allow verification of attestation generated in debug mode")
 )
+
+// todo: test the params
 
 func main() {
 	flag.Parse()
@@ -24,28 +28,30 @@ func main() {
 
 	attestation, err := base64.StdEncoding.DecodeString(*fAttestation)
 	if nil != err {
-		fmt.Println(
-			"Provided attestation is not encoded as a valid, " +
-				"standard Base64 string",
-		)
+		err = fmt.Errorf("decoding attestation: %w", err)
+		slog.Error(err.Error())
 		os.Exit(2)
 	}
 
-	verifier, err := nitrite.NewVerifier()
+	verifier, err := nitrite.NewVerifier(nitrite.WithDebug(*fDebug))
 	if err != nil {
-		fmt.Printf("Creating verifier: %v\n", err)
+		err = fmt.Errorf("creating verifier: %w", err)
+		slog.Error(err.Error())
 		os.Exit(2)
 	}
 
 	res, err := verifier.Verify(attestation)
 	if err != nil {
-		fmt.Printf("Verifying attestation: %v\n", err)
+		err = fmt.Errorf("verifying attestation: %w", err)
+		slog.Error(err.Error())
 		os.Exit(2)
 	}
 
 	enc, err := json.Marshal(res.Document)
 	if err != nil {
-		fmt.Printf("Marshalling attestation: %v\n", err)
+		err = fmt.Errorf("marshalling attestation: %w", err)
+		slog.Error(err.Error())
+		os.Exit(2)
 	}
 
 	fmt.Printf("%v\n", string(enc))

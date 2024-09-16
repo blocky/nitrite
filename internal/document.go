@@ -50,9 +50,8 @@ func (doc Document) Debug() (bool, error) {
 	}
 
 	pcr0Int, err := strconv.Atoi(hex.EncodeToString(pcr0))
-	if err != nil {
-		return false, fmt.Errorf("parsing PCR0: %w", err)
-	}
 
-	return pcr0Int == 0, nil
+	debug := err == nil && pcr0Int == 0
+
+	return debug, nil
 }

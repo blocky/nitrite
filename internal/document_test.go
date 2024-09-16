@@ -47,7 +47,7 @@ func TestDocument_Debug(t *testing.T) {
 		wantDebug bool
 	}{
 		{"happy path - in debug mode", map[uint][]byte{0: {0x00}}, true},
-		{"happy path - not in debug mode", map[uint][]byte{0: {0x01}}, false},
+		{"happy path - not in debug mode", map[uint][]byte{0: {0xAB}}, false},
 	}
 	for _, tt := range happyPathTests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -72,16 +72,5 @@ func TestDocument_Debug(t *testing.T) {
 
 		// then
 		assert.ErrorContains(t, err, "PCR0 not found")
-	})
-
-	t.Run("cannot parse PCR0", func(t *testing.T) {
-		// given
-		doc := internal.Document{PCRs: map[uint][]byte{0: {0xAB}}}
-
-		// when
-		_, err := doc.Debug()
-
-		// then
-		assert.ErrorContains(t, err, "parsing PCR0")
 	})
 }

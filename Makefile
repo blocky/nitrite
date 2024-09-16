@@ -17,7 +17,7 @@ test-integration: tidy
 .PHONY: test-main
 test-main: tidy
 	@$(eval attestation := $(shell cat internal/testdata/nitro_attestation.b64))
-	@go run cmd/nitrite/main.go -attestation $(attestation) > /dev/null
+	@go run cmd/nitrite/main.go -attestation $(attestation) 1>/dev/null
 	@echo "ok\tcmd/nitrite/main.go"
 
 .PHONY: test

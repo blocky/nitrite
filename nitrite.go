@@ -7,6 +7,8 @@ import (
 	"github.com/blocky/nitrite/internal"
 )
 
+// todo: test all this
+
 type Document = internal.Document
 type Result = internal.Result
 
@@ -45,9 +47,9 @@ func WithVerificationTime(t VerificationTime) VerifierConfigOption {
 	}
 }
 
-func WithDebug() VerifierConfigOption {
+func WithDebug(debug bool) VerifierConfigOption {
 	return func(c *VerifierConfig) {
-		c.debug = true
+		c.debug = debug
 	}
 }
 
@@ -108,7 +110,6 @@ func NewVerifierFromConfig(config *VerifierConfig) (*Verifier, error) {
 }
 
 func (v *Verifier) Verify(attestation []byte) (*Result, error) {
-	// todo: handle the debug flag
 	result, err := internal.Verify(
 		attestation,
 		v.certProvider,
@@ -116,6 +117,15 @@ func (v *Verifier) Verify(attestation []byte) (*Result, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("verifying attestation: %w", err)
+	}
+
+	docDebug, err := result.Document.Debug()
+	if err != nil {
+		return nil, fmt.Errorf("checking attestation debug: %w", err)
+	}
+
+	if !v.debug && docDebug {
+		return nil, fmt.Errorf("attestation was generated in debug mode")
 	}
 
 	result.Document = (*Document)(result.Document)
