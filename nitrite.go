@@ -19,7 +19,7 @@ type Verifier struct {
 
 func NewVerifier(
 	certProviderOpt func() (CertProvider, error),
-	verificationTimeOpt func() (VerificationTimeFunc, error),
+	verificationTimeOpt func() (*Server, error),
 ) (*Verifier, error) {
 	certProvider, err := certProviderOpt()
 	if err != nil {
