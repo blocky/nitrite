@@ -11,18 +11,18 @@ import (
 )
 
 var (
-	fDocument = flag.String("attestation", "", "Attestation document in standard Base64 encoding")
+	fAttestation = flag.String("attestation", "", "Attestation document in standard Base64 encoding")
 )
 
 func main() {
 	flag.Parse()
 
-	if "" == *fDocument {
+	if "" == *fAttestation {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	attestationBytes, err := base64.StdEncoding.DecodeString(*fDocument)
+	attestation, err := base64.StdEncoding.DecodeString(*fAttestation)
 	if nil != err {
 		fmt.Println(
 			"Provided attestation is not encoded as a valid, " +
@@ -31,27 +31,22 @@ func main() {
 		os.Exit(2)
 	}
 
-	res, err := nitrite.Verify(
-		attestationBytes,
-		nitrite.NewNitroCertProvider(),
-		nitrite.WithAttestationTime(),
-	)
-
-	resJSON := ""
-
-	if nil != res {
-		enc, err := json.Marshal(res.Document)
-		if nil != err {
-			panic(err)
-		}
-
-		resJSON = string(enc)
-	}
-
-	if nil != err {
-		fmt.Printf("Attestation verification failed with error %v\n", err)
+	verifier, err := nitrite.NewDefaultVerifier()
+	if err != nil {
+		fmt.Printf("Creating verifier: %v\n", err)
 		os.Exit(2)
 	}
 
-	fmt.Printf("%v\n", resJSON)
+	res, err := verifier.Verify(attestation)
+	if err != nil {
+		fmt.Printf("Verifying attestation: %v\n", err)
+		os.Exit(2)
+	}
+
+	enc, err := json.Marshal(res.Document)
+	if err != nil {
+		fmt.Printf("Marshalling attestation: %v\n", err)
+	}
+
+	fmt.Printf("%v\n", string(enc))
 }

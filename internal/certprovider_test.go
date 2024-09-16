@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/blocky/nitrite"
 	"github.com/blocky/nitrite/internal"
 	"github.com/blocky/nitrite/mocks"
 )
@@ -96,7 +95,7 @@ func TestNewFetchingRootCertZipReaderWithClient(t *testing.T) {
 }
 
 func TestNitroCertProvider_Interfaces(t *testing.T) {
-	var _ nitrite.CertProvider = internal.NewNitroCertProvider(
+	var _ internal.CertProvider = internal.NewNitroCertProvider(
 		internal.NewEmbeddedRootCertZipReader(),
 	)
 }
@@ -244,7 +243,7 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 }
 
 func TestSelfSignedCertProvider_Interfaces(t *testing.T) {
-	var _ nitrite.CertProvider = internal.NewSelfSignedCertProvider()
+	var _ internal.CertProvider = internal.NewSelfSignedCertProvider()
 }
 
 func TestNewSelfSignedCertProvider(t *testing.T) {

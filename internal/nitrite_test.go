@@ -1,4 +1,4 @@
-package nitrite_test
+package internal_test
 
 import (
 	"crypto/x509"
@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/blocky/nitrite"
+	"github.com/blocky/nitrite/internal"
 	"github.com/blocky/nitrite/mocks"
 )
 
@@ -201,7 +202,7 @@ func TestDocument_CreatedAt(t *testing.T) {
 	for _, tt := range happyPathTests {
 		t.Run(tt.name, func(t *testing.T) {
 			// given
-			doc := nitrite.Document{Timestamp: tt.timestamp}
+			doc := internal.Document{Timestamp: tt.timestamp}
 
 			// when
 			gotTime := doc.CreatedAt()
