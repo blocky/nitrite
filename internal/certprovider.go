@@ -79,26 +79,26 @@ func NewFetchingRootCertZipReaderWithClient(
 }
 
 type NitroCertProvider struct {
-	RootCerts         *x509.CertPool
-	RootCertZipReader io.ReadCloser
+	rootCerts         *x509.CertPool
+	rootCertZipReader io.ReadCloser
 	UnzipAWSRootCerts UnzipAWSRootCertsFunc
 }
 
 func NewNitroCertProvider(rootCertZipReader io.ReadCloser) *NitroCertProvider {
 	return &NitroCertProvider{
-		RootCerts:         nil,
-		RootCertZipReader: rootCertZipReader,
+		rootCerts:         nil,
+		rootCertZipReader: rootCertZipReader,
 		UnzipAWSRootCerts: UnzipAWSRootCerts,
 	}
 }
 
 func (cp *NitroCertProvider) Roots() (*x509.CertPool, error) {
-	if nil != cp.RootCerts {
-		return cp.RootCerts, nil
+	if nil != cp.rootCerts {
+		return cp.rootCerts, nil
 	}
 
-	zipBytes, err := io.ReadAll(cp.RootCertZipReader)
-	defer cp.RootCertZipReader.Close()
+	zipBytes, err := io.ReadAll(cp.rootCertZipReader)
+	defer cp.rootCertZipReader.Close()
 	if err != nil {
 		return nil, fmt.Errorf("reading ZIP bytes: %w", err)
 	}
@@ -124,9 +124,9 @@ func (cp *NitroCertProvider) Roots() (*x509.CertPool, error) {
 		return nil, fmt.Errorf("appending cert")
 	}
 
-	cp.RootCerts = certs
+	cp.rootCerts = certs
 
-	return cp.RootCerts, nil
+	return cp.rootCerts, nil
 }
 
 // TODO: Remove SelfSignedCertProvider as part of
@@ -136,7 +136,6 @@ func (cp *NitroCertProvider) Roots() (*x509.CertPool, error) {
 var selfSignedCertDER []byte
 
 type SelfSignedCertProvider struct {
-	RootCerts *x509.CertPool
 }
 
 func NewSelfSignedCertProvider() *SelfSignedCertProvider {
@@ -144,17 +143,7 @@ func NewSelfSignedCertProvider() *SelfSignedCertProvider {
 }
 
 func (cp *SelfSignedCertProvider) Roots() (*x509.CertPool, error) {
-	if nil != cp.RootCerts {
-		return cp.RootCerts, nil
-	}
-
-	certs, err := cp.RootWithCert(selfSignedCertDER)
-	if err != nil {
-		return nil, err
-	}
-	cp.RootCerts = certs
-
-	return cp.RootCerts, nil
+	return cp.RootWithCert(selfSignedCertDER)
 }
 
 func (_ *SelfSignedCertProvider) RootWithCert(

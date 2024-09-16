@@ -109,9 +109,7 @@ func TestNewNitroCertProvider(t *testing.T) {
 		)
 
 		// then
-		assert.Nil(t, cp.RootCerts)
-		assert.NotNil(t, cp.RootCertZipReader)
-		assert.NotNil(t, cp.UnzipAWSRootCerts)
+		assert.NotEmpty(t, cp)
 	})
 }
 
@@ -128,31 +126,24 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.False(t, gotRoots.Equal(x509.NewCertPool())) // check not empty
-		assert.NotNil(t, cp.RootCerts)                      // cp.RootCerts got set
-		assert.Equal(t, gotRoots, cp.RootCerts)
 	})
 
-	t.Run("happy path - returns cached roots", func(t *testing.T) {
+	t.Run("happy path - multiple calls", func(t *testing.T) {
+		// We need to test multiple calls to Roots(). because the first call
+		// closes rootCertZipReader after which Roots() returns cached values.
+
 		// given
 		cp := internal.NewNitroCertProvider(
 			internal.NewEmbeddedRootCertZipReader(),
 		)
-		// first call sets the cached value
-		_, err := cp.Roots()
-		require.NoError(t, err)
-		// replace the unzip function with a mock
-		unzipRoots := mocks.NewInternalUnzipAWSRootCertsFunc(t)
-		cp.UnzipAWSRootCerts = unzipRoots.Execute
-
-		// expecting
-		// if caching works unzipRoots should never be called
 
 		// when
-		gotRoots, err := cp.Roots()
+		_, err := cp.Roots()
+		require.NoError(t, err)
+		_, err = cp.Roots()
 
 		// then
 		require.NoError(t, err)
-		assert.False(t, gotRoots.Equal(x509.NewCertPool())) // check not empty
 	})
 
 	t.Run("cannot read root certs", func(t *testing.T) {
@@ -170,7 +161,6 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 		// then
 		assert.ErrorIs(t, err, assert.AnError)
 		assert.ErrorContains(t, err, "reading ZIP bytes")
-		assert.Nil(t, cp.RootCerts)
 	})
 
 	t.Run("digest mismatch", func(t *testing.T) {
@@ -187,7 +177,6 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 
 		// then
 		assert.ErrorContains(t, err, "digest mismatch")
-		assert.Nil(t, cp.RootCerts)
 	})
 
 	t.Run("cannot unzip root certs", func(t *testing.T) {
@@ -208,7 +197,6 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 
 		// then
 		assert.ErrorContains(t, err, "unzipping roots")
-		assert.Nil(t, cp.RootCerts)
 	})
 
 	appendCertErrorTests := []struct {
@@ -238,7 +226,6 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 
 			// then
 			assert.ErrorContains(t, err, "appending cert")
-			assert.Nil(t, cp.RootCerts)
 		})
 	}
 }
@@ -269,7 +256,6 @@ func TestSelfSignedCertProvider_Roots(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.False(t, gotRoots.Equal(x509.NewCertPool())) // check not empty
-		assert.NotEmpty(t, cp)                              // cp.roots got set
 	})
 
 	errorTests := []struct {
