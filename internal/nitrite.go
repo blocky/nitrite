@@ -109,6 +109,18 @@ var (
 
 type VerificationTimeFunc func(Document) time.Time
 
+func WithAttestationTime() VerificationTimeFunc {
+	return func(doc Document) time.Time {
+		return doc.CreatedAt()
+	}
+}
+
+func WithTime(t time.Time) VerificationTimeFunc {
+	return func(_ Document) time.Time {
+		return t
+	}
+}
+
 // Verify verifies the attestation payload from `data` with the provided
 // verification options. If the options specify `Roots` as `nil`, the
 // `DefaultCARoot` will be used. If you do not specify `CurrentTime`,

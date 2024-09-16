@@ -1,6 +1,9 @@
 package internal
 
 import (
+	"encoding/hex"
+	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -18,8 +21,8 @@ type Document struct {
 	Nonce     []byte `cbor:"nonce" json:"nonce,omitempty"`
 }
 
-func (d Document) CreatedAt() time.Time {
-	if d.Timestamp == 0 {
+func (doc Document) CreatedAt() time.Time {
+	if doc.Timestamp == 0 {
 		return time.Time{}
 	}
 
@@ -31,11 +34,25 @@ func (d Document) CreatedAt() time.Time {
 	//  https://blocky.atlassian.net/browse/BKY-5620
 
 	var createdAt time.Time
-	if time.UnixMilli(int64(d.Timestamp)).Year() < 1980 {
-		createdAt = time.Unix(int64(d.Timestamp), 0)
+	if time.UnixMilli(int64(doc.Timestamp)).Year() < 1980 {
+		createdAt = time.Unix(int64(doc.Timestamp), 0)
 	} else {
-		createdAt = time.UnixMilli(int64(d.Timestamp))
+		createdAt = time.UnixMilli(int64(doc.Timestamp))
 	}
 
 	return createdAt
+}
+
+func (doc Document) Debug() (bool, error) {
+	pcr0, ok := doc.PCRs[0]
+	if !ok {
+		return false, fmt.Errorf("PCR0 not found")
+	}
+
+	pcr0Int, err := strconv.Atoi(hex.EncodeToString(pcr0))
+	if err != nil {
+		return false, fmt.Errorf("parsing PCR0: %w", err)
+	}
+
+	return pcr0Int == 0, nil
 }

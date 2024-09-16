@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/blocky/nitrite"
 	"github.com/blocky/nitrite/internal"
 	"github.com/blocky/nitrite/mocks"
 )
@@ -42,22 +41,26 @@ func TestNitrite_Verify(t *testing.T) {
 	attestatations := map[string]struct {
 		attestation  []byte
 		time         time.Time
-		certProvider nitrite.CertProvider
+		certProvider internal.CertProvider
 	}{
 		"nitro": {
-			attestation:  nitroAttestation,
-			time:         nitroAttestationTime,
-			certProvider: nitrite.NewNitroCertProvider(),
+			attestation: nitroAttestation,
+			time:        nitroAttestationTime,
+			certProvider: internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
 		},
 		"debug": {
-			attestation:  debugNitroAttestation,
-			time:         debugNitroAttestationTime,
-			certProvider: nitrite.NewNitroCertProvider(),
+			attestation: debugNitroAttestation,
+			time:        debugNitroAttestationTime,
+			certProvider: internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
 		},
 		"self-signed": {
 			attestation:  selfSignedAttestation,
 			time:         selfSignedAttestationTime,
-			certProvider: nitrite.NewSelfSignedCertProvider(),
+			certProvider: internal.NewSelfSignedCertProvider(),
 		},
 	}
 
@@ -66,10 +69,10 @@ func TestNitrite_Verify(t *testing.T) {
 			t.Log(key)
 
 			// when
-			result, err := nitrite.Verify(
+			result, err := internal.Verify(
 				attestatations[key].attestation,
 				attestatations[key].certProvider,
-				nitrite.WithAttestationTime(),
+				internal.WithAttestationTime(),
 			)
 
 			// then
@@ -92,10 +95,10 @@ func TestNitrite_Verify(t *testing.T) {
 			certProvider.EXPECT().Roots().Return(nil, assert.AnError)
 
 			// when
-			_, err := nitrite.Verify(
+			_, err := internal.Verify(
 				attestatations[key].attestation,
 				certProvider,
-				nitrite.WithAttestationTime(),
+				internal.WithAttestationTime(),
 			)
 
 			// then
@@ -113,10 +116,10 @@ func TestNitrite_Verify(t *testing.T) {
 			certProvider.EXPECT().Roots().Return(nil, nil)
 
 			// when
-			_, err := nitrite.Verify(
+			_, err := internal.Verify(
 				attestatations[key].attestation,
 				certProvider,
-				nitrite.WithAttestationTime(),
+				internal.WithAttestationTime(),
 			)
 
 			// then
@@ -133,10 +136,10 @@ func TestNitrite_Verify(t *testing.T) {
 			certProvider.EXPECT().Roots().Return(x509.NewCertPool(), nil)
 
 			// when
-			_, err := nitrite.Verify(
+			_, err := internal.Verify(
 				attestatations[key].attestation,
 				certProvider,
-				nitrite.WithAttestationTime(),
+				internal.WithAttestationTime(),
 			)
 
 			// then
@@ -145,22 +148,22 @@ func TestNitrite_Verify(t *testing.T) {
 
 		timeOutOfBoundsTests := []struct {
 			name        string
-			timeOpt     nitrite.VerificationTimeFunc
+			timeOpt     internal.VerificationTimeFunc
 			errContains string
 		}{
 			{
 				"certificate expired",
-				nitrite.WithTime(time.Date(10000, 0, 0, 0, 0, 0, 0, time.UTC)),
+				internal.WithTime(time.Date(10000, 0, 0, 0, 0, 0, 0, time.UTC)),
 				"verifying certificate",
 			},
 			{
 				"certificate not yet valid",
-				nitrite.WithTime(time.Date(1970, 0, 0, 0, 0, 0, 0, time.UTC)),
+				internal.WithTime(time.Date(1970, 0, 0, 0, 0, 0, 0, time.UTC)),
 				"verifying certificate",
 			},
 			{
 				"zero time",
-				nitrite.WithTime(time.Time{}),
+				internal.WithTime(time.Time{}),
 				"verification time is 0",
 			},
 		}
@@ -169,7 +172,7 @@ func TestNitrite_Verify(t *testing.T) {
 				t.Log(key)
 
 				// when
-				_, err = nitrite.Verify(
+				_, err = internal.Verify(
 					attestatations[key].attestation,
 					attestatations[key].certProvider,
 					tt.timeOpt,
@@ -179,36 +182,5 @@ func TestNitrite_Verify(t *testing.T) {
 				assert.ErrorContains(t, err, tt.errContains)
 			})
 		}
-	}
-}
-
-func TestDocument_CreatedAt(t *testing.T) {
-	happyPathTests := []struct {
-		name      string
-		timestamp uint64
-		wantTime  time.Time
-	}{
-		{
-			"happy path",
-			uint64(nitroAttestationTime.UnixMilli()),
-			nitroAttestationTime,
-		},
-		{
-			"zero time",
-			uint64(0),
-			time.Time{},
-		},
-	}
-	for _, tt := range happyPathTests {
-		t.Run(tt.name, func(t *testing.T) {
-			// given
-			doc := internal.Document{Timestamp: tt.timestamp}
-
-			// when
-			gotTime := doc.CreatedAt()
-
-			// then
-			assert.Equal(t, tt.wantTime.UTC(), gotTime.UTC())
-		})
 	}
 }

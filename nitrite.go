@@ -94,13 +94,9 @@ func NewVerifierFromConfig(config *VerifierConfig) (*Verifier, error) {
 
 	switch config.verificationTime {
 	case AttestationTime:
-		verifier.verificationTime = func(doc internal.Document) time.Time {
-			return doc.CreatedAt()
-		}
+		verifier.verificationTime = internal.WithAttestationTime()
 	case CurrentTime:
-		verifier.verificationTime = func(_ internal.Document) time.Time {
-			return time.Now()
-		}
+		verifier.verificationTime = internal.WithTime(time.Now())
 	default:
 		return nil,
 			fmt.Errorf("unknown verification time: %d", config.verificationTime)
