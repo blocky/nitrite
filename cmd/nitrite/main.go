@@ -31,7 +31,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	verifier, err := nitrite.NewDefaultVerifier()
+	verifier, err := nitrite.NewVerifier()
 	if err != nil {
 		fmt.Printf("Creating verifier: %v\n", err)
 		os.Exit(2)

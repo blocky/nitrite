@@ -4,106 +4,115 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fxamacker/cbor/v2"
-
 	"github.com/blocky/nitrite/internal"
 )
 
 type Document = internal.Document
 type Result = internal.Result
-type CertProvider = internal.CertProvider
-type VerificationTimeFunc = internal.VerificationTimeFunc
 
-type Verifier struct {
-	certProvider     CertProvider
-	verificationTime VerificationTimeFunc
-}
+type CertProvider int
+
+const (
+	EmbeddedNitroCertProvider CertProvider = iota
+	FetchingNitroCertProvider
+	SelfSignedCertProvider
+)
+
+type VerificationTime int
+
+const (
+	AttestationTime VerificationTime = iota
+	CurrentTime
+)
 
 type VerifierConfig struct {
+	certProvider     CertProvider
+	verificationTime VerificationTime
+	debug            bool
 }
 
-func (v *VerifierConfig) WithBob() *VerifierConfig {
+type VerifierConfigOption func(*VerifierConfig)
+
+func WithCertProvider(p CertProvider) VerifierConfigOption {
+	return func(c *VerifierConfig) {
+		c.certProvider = p
+	}
 }
 
-func NewVerifier(
-	certProviderOpt func() (CertProvider, error),
-	verificationOpt ...func() (*Verifier, error), // timestamp, debug, ...
-) (*Verifier, error) {
-	certProvider, err := certProviderOpt()
-	if err != nil {
-		return nil, fmt.Errorf("creating cert provider: %w", err)
+func WithVerificationTime(t VerificationTime) VerifierConfigOption {
+	return func(c *VerifierConfig) {
+		c.verificationTime = t
+	}
+}
+
+func WithDebug() VerifierConfigOption {
+	return func(c *VerifierConfig) {
+		c.debug = true
+	}
+}
+
+type Verifier struct {
+	certProvider     internal.CertProvider
+	verificationTime internal.VerificationTimeFunc
+	debug            bool
+}
+
+func NewVerifier(options ...VerifierConfigOption) (*Verifier, error) {
+	config := &VerifierConfig{
+		certProvider:     EmbeddedNitroCertProvider,
+		verificationTime: AttestationTime,
+		debug:            false,
+	}
+	for _, opt := range options {
+		opt(config)
 	}
 
-	verificationTimeFunc, err := verificationTimeOpt()
-	if err != nil {
-		return nil, fmt.Errorf("creating verification time func: %w", err)
+	return NewVerifierFromConfig(config)
+}
+
+func NewVerifierFromConfig(config *VerifierConfig) (*Verifier, error) {
+	var verifier = new(Verifier)
+
+	switch config.certProvider {
+	case EmbeddedNitroCertProvider:
+		verifier.certProvider = internal.NewNitroCertProvider(
+			internal.NewEmbeddedRootCertZipReader(),
+		)
+	case FetchingNitroCertProvider:
+		reader, err := internal.NewFetchingRootCertZipReader()
+		if nil != err {
+			return nil,
+				fmt.Errorf("creating fetching root cert zip reader: %w", err)
+		}
+		verifier.certProvider = internal.NewNitroCertProvider(reader)
+	case SelfSignedCertProvider:
+		verifier.certProvider = internal.NewSelfSignedCertProvider()
+	default:
+		return nil,
+			fmt.Errorf("unknown cert provider: %d", config.certProvider)
 	}
 
-	return &Verifier{
-		certProvider:     certProvider,
-		verificationTime: verificationTimeFunc,
-	}, nil
-}
-
-func WithNitroCertProvider() (CertProvider, error) {
-	return internal.NewNitroCertProvider(
-		internal.NewEmbeddedRootCertZipReader(),
-	), nil
-}
-
-func WithFetchingNitroCertProvider() (CertProvider, error) {
-	reader, err := internal.NewFetchingRootCertZipReader()
-	if nil != err {
-		return nil, fmt.Errorf("creating fetching root cert zip reader: %w", err)
+	switch config.verificationTime {
+	case AttestationTime:
+		verifier.verificationTime = func(doc internal.Document) time.Time {
+			return doc.CreatedAt()
+		}
+	case CurrentTime:
+		verifier.verificationTime = func(_ internal.Document) time.Time {
+			return time.Now()
+		}
+	default:
+		return nil,
+			fmt.Errorf("unknown verification time: %d", config.verificationTime)
 	}
 
-	return internal.NewNitroCertProvider(reader), nil
-}
-// would be nice if the options pattern not contradicted itself
-// - maybe we have two enumerated options for now and attestation time, but then
-//   we could have an internal function for testing that allows for specific time.Time
+	verifier.debug = config.debug
 
-func WithAttestationTime() (, error) {
-	optionsStruct.VerificationTimeFunc =  func(doc internal.Document) time.Time {
-
-		return doc.CreatedAt()
-	}, nil
-}
-
-func WithTime(t time.Time) (VerificationTimeFunc, error) {
-	return func(_ internal.Document) time.Time {
-		return t
-	}, nil
-}
-
-// default no debug
-func WithDebug() (*VerifierConfig, error) {
-}
-
-func NewDefaultVerifier() (*Verifier, error) {
-	return NewVerifier(
-		WithNitroCertProvider,
-		WithAttestationTime,
-	)
+	return verifier, nil
 }
 
 func (v *Verifier) Verify(attestation []byte) (*Result, error) {
-	cose := cosePayload{}
-
-	err := cbor.Unmarshal(attestation, &cose)
-
-
-	doc := Document{}
-
-	err = cbor.Unmarshal(cose.Payload, &doc)
-
-	document.Verify()
-
-	verificationTime := docuemnt.CreatedAt()
-
-	err = cose.Verify(verificationTime time.time)
-
-
+	// todo: handle the debug flag
 	result, err := internal.Verify(
 		attestation,
 		v.certProvider,
