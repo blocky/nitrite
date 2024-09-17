@@ -1,6 +1,8 @@
 package internal_test
 
 import (
+	"archive/zip"
+	"bytes"
 	"crypto/x509"
 	"io"
 	"net/http"
@@ -29,7 +31,7 @@ func TestUnzipAWSRootCerts(t *testing.T) {
 		assert.NotEmpty(t, unzipped)
 	})
 
-	errorTests := []struct {
+	unzipErrorTests := []struct {
 		name   string
 		zipped []byte
 	}{
@@ -37,15 +39,47 @@ func TestUnzipAWSRootCerts(t *testing.T) {
 		{"nil", nil},
 		{"invalid", []byte("invalid zip bytes")},
 	}
-	for _, tt := range errorTests {
+	for _, tt := range unzipErrorTests {
 		t.Run("cannot unzip "+tt.name+" zip", func(t *testing.T) {
 			// when
 			_, err := internal.UnzipAWSRootCerts(tt.zipped)
 
 			// then
-			assert.Error(t, err)
+			assert.ErrorContains(t, err, "creating zip reader")
 		})
 	}
+
+	t.Run("unexpected file count", func(t *testing.T) {
+		// given
+		zipped := &bytes.Buffer{}
+		w := zip.NewWriter(zipped)
+		_, err := w.Create("file1")
+		require.NoError(t, err)
+		_, err = w.Create("file2")
+		require.NoError(t, err)
+		require.NoError(t, w.Close())
+
+		// when
+		_, err = internal.UnzipAWSRootCerts(zipped.Bytes())
+
+		// then
+		assert.ErrorContains(t, err, "unexpected file count")
+	})
+
+	t.Run("unexpected file name", func(t *testing.T) {
+		// given
+		zipped := &bytes.Buffer{}
+		w := zip.NewWriter(zipped)
+		_, err := w.Create("file1")
+		require.NoError(t, err)
+		require.NoError(t, w.Close())
+
+		// when
+		_, err = internal.UnzipAWSRootCerts(zipped.Bytes())
+
+		// then
+		assert.ErrorContains(t, err, "unexpected file name")
+	})
 }
 
 func TestNewEmbeddedRootCertZipReader(t *testing.T) {
