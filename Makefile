@@ -12,7 +12,7 @@ test-unit: tidy
 
 .PHONY: test-integration
 test-integration: tidy
-	@go test -v -tags=integration ./test/integration/...
+	@go test -v ./test/integration/...
 
 .PHONY: test-main
 test-main: tidy
