@@ -189,7 +189,7 @@ type CertProvider interface {
 	Roots() (*x509.CertPool, error)
 }
 
-func NewNitroCertProvider() CertProvider {
+func NewEmbeddedNitroCertProvider() CertProvider {
 	return internal.NewNitroCertProvider(
 		internal.NewEmbeddedRootCertZipReader(),
 	)
