@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"crypto/sha512"
-	"crypto/x509"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -80,31 +79,8 @@ var (
 
 // Errors encountered when parsing the CoseBytes attestation document.
 var (
-	ErrBadAttestationDocument error = errors.New("Bad attestation document")
-	ErrMandatoryFieldsMissing error = errors.New("One or more of mandatory fields missing")
-	ErrBadDigest              error = errors.New("Payload 'digest' is not SHA384")
-	ErrBadTimestamp           error = errors.New("Payload 'timestamp' is 0 or less")
-	ErrBadPCRs                error = errors.New("Payload 'pcrs' is less than 1 or more than 32")
-	ErrBadPCRIndex            error = errors.New("Payload 'pcrs' key index is not in [0, 32)")
-	ErrBadPCRValue            error = errors.New("Payload 'pcrs' value is nil or not of length {32,48,64}")
-	ErrBadCABundle            error = errors.New("Payload 'cabundle' has 0 elements")
-	ErrBadCABundleItem        error = errors.New("Payload 'cabundle' has a nil item or of length not in [1, 1024]")
-	ErrBadPublicKey           error = fmt.Errorf(
-		"Payload 'public_key' length greater than %d",
-		MaxPublicKeyLen,
-	)
-	ErrBadUserData error = fmt.Errorf(
-		"Payload 'user_data' length greater than %d",
-		MaxUserDataLen,
-	)
-	ErrBadNonce error = fmt.Errorf(
-		"Payload 'nonce' length greater than %d",
-		MaxNonceLen,
-	)
-	ErrBadCertificatePublicKeyAlgorithm error = errors.New("Payload 'certificate' has a bad public key algorithm (not ECDSA)")
-	ErrBadCertificateSigningAlgorithm   error = errors.New("Payload 'certificate' has a bad public key signing algorithm (not ECDSAWithSHA384)")
-	ErrBadSignature                     error = errors.New("Payload's signature does not match signature from certificate")
-	ErrMarshallingCoseSignature         error = errors.New("Could not marshal COSE signature")
+	ErrBadSignature             error = errors.New("Payload's signature does not match signature from certificate")
+	ErrMarshallingCoseSignature error = errors.New("Could not marshal COSE signature")
 )
 
 type VerificationTimeFunc func(Document) time.Time
@@ -196,131 +172,14 @@ func Verify(
 	}
 
 	doc := Document{}
-
 	err = cbor.Unmarshal(cose.Payload, &doc)
 	if nil != err {
-		return nil, ErrBadAttestationDocument
+		return nil, fmt.Errorf("unmarshaling document: %w", err)
 	}
 
-	if "" == doc.ModuleID ||
-		"" == doc.Digest ||
-		0 == doc.Timestamp ||
-		nil == doc.PCRs ||
-		nil == doc.Certificate {
-		return nil, ErrMandatoryFieldsMissing
-	}
-
-	cert, err := x509.ParseCertificate(doc.Certificate)
-	if nil != err {
-		return nil, err
-	}
-
-	// TODO: remove the support for self-signed attestations as part of
-	//  https://blocky.atlassian.net/browse/BKY-5620 (remove !cert.IsCA path)
-	if !cert.IsCA && nil == doc.CABundle {
-		return nil, ErrMandatoryFieldsMissing
-	}
-
-	if "SHA384" != doc.Digest {
-		return nil, ErrBadDigest
-	}
-
-	if doc.Timestamp < 1 {
-		return nil, ErrBadTimestamp
-	}
-
-	if len(doc.PCRs) < 1 || len(doc.PCRs) > 32 {
-		return nil, ErrBadPCRs
-	}
-
-	for key, value := range doc.PCRs {
-		if key > 31 {
-			return nil, ErrBadPCRIndex
-		}
-
-		if nil == value ||
-			!(32 == len(value) ||
-				48 == len(value) ||
-				64 == len(value) ||
-				96 == len(value)) {
-			return nil, ErrBadPCRValue
-		}
-	}
-
-	if !cert.IsCA && len(doc.CABundle) < 1 {
-		return nil, ErrBadCABundle
-	}
-
-	if !cert.IsCA {
-		for _, item := range doc.CABundle {
-			if nil == item || len(item) < 1 || len(item) > 1024 {
-				return nil, ErrBadCABundleItem
-			}
-		}
-	}
-
-	if nil != doc.PublicKey && len(doc.PublicKey) > MaxPublicKeyLen {
-		return nil, ErrBadPublicKey
-	}
-	if nil != doc.UserData && len(doc.UserData) > MaxUserDataLen {
-		return nil, ErrBadUserData
-	}
-	if nil != doc.Nonce && len(doc.Nonce) > MaxNonceLen {
-		return nil, ErrBadNonce
-	}
-
-	var certificates []*x509.Certificate
-	if !cert.IsCA {
-		certificates = make([]*x509.Certificate, 0, len(doc.CABundle)+1)
-	} else {
-		certificates = make([]*x509.Certificate, 1)
-	}
-
-	if x509.ECDSA != cert.PublicKeyAlgorithm {
-		return nil, ErrBadCertificatePublicKeyAlgorithm
-	}
-
-	if x509.ECDSAWithSHA384 != cert.SignatureAlgorithm {
-		return nil, ErrBadCertificateSigningAlgorithm
-	}
-
-	certificates = append(certificates, cert)
-
-	intermediates := x509.NewCertPool()
-
-	if !cert.IsCA {
-		for _, item := range doc.CABundle {
-			cert, err := x509.ParseCertificate(item)
-			if nil != err {
-				return nil, err
-			}
-
-			intermediates.AddCert(cert)
-			certificates = append(certificates, cert)
-		}
-	}
-
-	if verificationTime(doc).IsZero() {
-		return nil, fmt.Errorf("verification time is 0")
-	}
-
-	roots, err := certProvider.Roots()
-	if nil != err {
-		return nil, fmt.Errorf("getting root certificates: %w", err)
-	}
-
-	_, err = cert.Verify(
-		x509.VerifyOptions{
-			Intermediates: intermediates,
-			Roots:         roots,
-			CurrentTime:   verificationTime(doc),
-			KeyUsages: []x509.ExtKeyUsage{
-				x509.ExtKeyUsageAny,
-			},
-		},
-	)
+	cert, certificates, err := doc.Verify(certProvider, verificationTime)
 	if err != nil {
-		return nil, fmt.Errorf("verifying certificate: %w", err)
+		return nil, fmt.Errorf("verifying document: %w", err)
 	}
 
 	coseSig := coseSignature{
