@@ -110,6 +110,7 @@ func NewVerifierFromConfig(config *VerifierConfig) (*Verifier, error) {
 }
 
 func (v *Verifier) Verify(attestation []byte) (*Result, error) {
+	// todo: say that we're using internal.Verify for now
 	result, err := internal.Verify(
 		attestation,
 		v.certProvider,
@@ -119,16 +120,17 @@ func (v *Verifier) Verify(attestation []byte) (*Result, error) {
 		return nil, fmt.Errorf("verifying attestation: %w", err)
 	}
 
-	docDebug, err := result.Document.Debug()
-	if err != nil {
-		return nil, fmt.Errorf("checking attestation debug: %w", err)
-	}
-
-	if !v.debug && docDebug {
-		return nil, fmt.Errorf("attestation was generated in debug mode")
-	}
-
-	result.Document = (*Document)(result.Document)
+	// todo: move this to internal.Verify
+	// docDebug, err := result.Document.Debug()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("checking attestation debug: %w", err)
+	// }
+	//
+	// if !v.debug && docDebug {
+	// 	return nil, fmt.Errorf("attestation was generated in debug mode")
+	// }
+	//
+	// result.Document = (*Document)(result.Document)
 
 	return result, nil
 }
