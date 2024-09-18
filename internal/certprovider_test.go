@@ -1,6 +1,8 @@
 package internal_test
 
 import (
+	"archive/zip"
+	"bytes"
 	"crypto/x509"
 	"io"
 	"net/http"
@@ -28,7 +30,7 @@ func TestUnzipAWSRootCerts(t *testing.T) {
 		assert.NotEmpty(t, unzipped)
 	})
 
-	errorTests := []struct {
+	unzipErrorTests := []struct {
 		name   string
 		zipped []byte
 	}{
@@ -36,15 +38,47 @@ func TestUnzipAWSRootCerts(t *testing.T) {
 		{"nil", nil},
 		{"invalid", []byte("invalid zip bytes")},
 	}
-	for _, tt := range errorTests {
+	for _, tt := range unzipErrorTests {
 		t.Run("cannot unzip "+tt.name+" zip", func(t *testing.T) {
 			// when
 			_, err := internal.UnzipAWSRootCerts(tt.zipped)
 
 			// then
-			assert.Error(t, err)
+			assert.ErrorContains(t, err, "creating zip reader")
 		})
 	}
+
+	t.Run("unexpected file count", func(t *testing.T) {
+		// given
+		zipped := &bytes.Buffer{}
+		w := zip.NewWriter(zipped)
+		_, err := w.Create("file1")
+		require.NoError(t, err)
+		_, err = w.Create("file2")
+		require.NoError(t, err)
+		require.NoError(t, w.Close())
+
+		// when
+		_, err = internal.UnzipAWSRootCerts(zipped.Bytes())
+
+		// then
+		assert.ErrorContains(t, err, "unexpected file count")
+	})
+
+	t.Run("unexpected file name", func(t *testing.T) {
+		// given
+		zipped := &bytes.Buffer{}
+		w := zip.NewWriter(zipped)
+		_, err := w.Create("file1")
+		require.NoError(t, err)
+		require.NoError(t, w.Close())
+
+		// when
+		_, err = internal.UnzipAWSRootCerts(zipped.Bytes())
+
+		// then
+		assert.ErrorContains(t, err, "unexpected file name")
+	})
 }
 
 func TestNewEmbeddedRootCertZipReader(t *testing.T) {
@@ -108,9 +142,7 @@ func TestNewNitroCertProvider(t *testing.T) {
 		)
 
 		// then
-		assert.Nil(t, cp.RootCerts)
-		assert.NotNil(t, cp.RootCertZipReader)
-		assert.NotNil(t, cp.UnzipAWSRootCerts)
+		assert.NotEmpty(t, cp)
 	})
 }
 
@@ -127,26 +159,20 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.False(t, gotRoots.Equal(x509.NewCertPool())) // check not empty
-		assert.NotNil(t, cp.RootCerts)                      // cp.RootCerts got set
-		assert.Equal(t, gotRoots, cp.RootCerts)
 	})
 
-	t.Run("happy path - returns cached roots", func(t *testing.T) {
+	t.Run("happy path - multiple calls", func(t *testing.T) {
+		// We need to test multiple calls to Roots(). because the first call
+		// closes rootCertZipReader after which Roots() returns cached values.
+
 		// given
 		cp := internal.NewNitroCertProvider(
 			internal.NewEmbeddedRootCertZipReader(),
 		)
-		// first call sets the cached value
-		_, err := cp.Roots()
-		require.NoError(t, err)
-		// replace the unzip function with a mock
-		unzipRoots := mocks.NewInternalUnzipAWSRootCertsFunc(t)
-		cp.UnzipAWSRootCerts = unzipRoots.Execute
-
-		// expecting
-		// if caching works unzipRoots should never be called
 
 		// when
+		_, err := cp.Roots()
+		require.NoError(t, err)
 		gotRoots, err := cp.Roots()
 
 		// then
@@ -169,7 +195,6 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 		// then
 		assert.ErrorIs(t, err, assert.AnError)
 		assert.ErrorContains(t, err, "reading ZIP bytes")
-		assert.Nil(t, cp.RootCerts)
 	})
 
 	t.Run("digest mismatch", func(t *testing.T) {
@@ -186,7 +211,6 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 
 		// then
 		assert.ErrorContains(t, err, "digest mismatch")
-		assert.Nil(t, cp.RootCerts)
 	})
 
 	t.Run("cannot unzip root certs", func(t *testing.T) {
@@ -207,7 +231,6 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 
 		// then
 		assert.ErrorContains(t, err, "unzipping roots")
-		assert.Nil(t, cp.RootCerts)
 	})
 
 	appendCertErrorTests := []struct {
@@ -237,7 +260,6 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 
 			// then
 			assert.ErrorContains(t, err, "appending cert")
-			assert.Nil(t, cp.RootCerts)
 		})
 	}
 }
@@ -268,7 +290,6 @@ func TestSelfSignedCertProvider_Roots(t *testing.T) {
 		// then
 		require.NoError(t, err)
 		assert.False(t, gotRoots.Equal(x509.NewCertPool())) // check not empty
-		assert.NotEmpty(t, cp)                              // cp.roots got set
 	})
 
 	errorTests := []struct {
