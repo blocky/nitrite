@@ -33,7 +33,7 @@ func main() {
 
 	res, err := nitrite.Verify(
 		attestationBytes,
-		nitrite.NewNitroCertProvider(),
+		nitrite.NewEmbeddedNitroCertProvider(),
 		nitrite.WithAttestationTime(),
 	)
 

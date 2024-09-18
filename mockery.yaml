@@ -6,4 +6,13 @@ packages:
   github.com/blocky/nitrite:
     interfaces:
       CertProvider:
+  github.com/blocky/nitrite/internal:
+    interfaces:
+      UnzipAWSRootCertsFunc:
+  net/http:
+    interfaces:
+      RoundTripper:
+  io:
+    interfaces:
+      ReadCloser:
 

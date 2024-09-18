@@ -189,8 +189,24 @@ type CertProvider interface {
 	Roots() (*x509.CertPool, error)
 }
 
-var NewNitroCertProvider = internal.NewNitroCertProvider
-var NewSelfSignedCertProvider = internal.NewSelfSignedCertProvider
+func NewEmbeddedNitroCertProvider() CertProvider {
+	return internal.NewNitroCertProvider(
+		internal.NewEmbeddedRootCertZipReader(),
+	)
+}
+
+func NewFetchingNitroCertProvider() (CertProvider, error) {
+	reader, err := internal.NewFetchingRootCertZipReader()
+	if nil != err {
+		return nil, fmt.Errorf("creating fetching root cert zip reader: %w", err)
+	}
+
+	return internal.NewNitroCertProvider(reader), nil
+}
+
+func NewSelfSignedCertProvider() CertProvider {
+	return internal.NewSelfSignedCertProvider()
+}
 
 // Verify verifies the attestation payload from `data` with the provided
 // verification options. If the options specify `Roots` as `nil`, the
