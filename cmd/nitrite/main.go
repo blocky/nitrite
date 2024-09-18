@@ -13,10 +13,8 @@ import (
 
 var (
 	fAttestation = flag.String("attestation", "", "Attestation document in standard Base64 encoding")
-	fDebug       = flag.Bool("debug", false, "Allow verification of attestation generated in debug mode")
+	fAllowDebug  = flag.Bool("allowdebug", false, "Allow verification of attestation generated in debug mode")
 )
-
-// todo: test the params
 
 func main() {
 	flag.Parse()
@@ -33,7 +31,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	verifier, err := nitrite.NewVerifier(nitrite.WithDebug(*fDebug))
+	verifier, err := nitrite.NewVerifier(nitrite.WithAllowDebug(*fAllowDebug))
 	if err != nil {
 		err = fmt.Errorf("creating verifier: %w", err)
 		slog.Error(err.Error())

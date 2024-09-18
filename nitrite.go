@@ -47,7 +47,7 @@ func WithVerificationTime(t VerificationTime) VerifierConfigOption {
 	}
 }
 
-func WithDebug(debug bool) VerifierConfigOption {
+func WithAllowDebug(debug bool) VerifierConfigOption {
 	return func(c *VerifierConfig) {
 		c.allowDebug = debug
 	}

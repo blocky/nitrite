@@ -47,13 +47,13 @@ func TestNewVerifier(t *testing.T) {
 		{
 			name: "happy path - allow debug",
 			opts: []nitrite.VerifierConfigOption{
-				nitrite.WithDebug(true),
+				nitrite.WithAllowDebug(true),
 			},
 		},
 		{
 			name: "happy path - no debug",
 			opts: []nitrite.VerifierConfigOption{
-				nitrite.WithDebug(false),
+				nitrite.WithAllowDebug(false),
 			},
 		},
 		{
@@ -61,7 +61,7 @@ func TestNewVerifier(t *testing.T) {
 			opts: []nitrite.VerifierConfigOption{
 				nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
 				nitrite.WithVerificationTime(nitrite.AttestationTime),
-				nitrite.WithDebug(true),
+				nitrite.WithAllowDebug(true),
 			},
 		},
 		{
@@ -71,8 +71,8 @@ func TestNewVerifier(t *testing.T) {
 				nitrite.WithCertProvider(nitrite.SelfSignedCertProvider),
 				nitrite.WithVerificationTime(nitrite.AttestationTime),
 				nitrite.WithVerificationTime(nitrite.CurrentTime),
-				nitrite.WithDebug(true),
-				nitrite.WithDebug(false),
+				nitrite.WithAllowDebug(true),
+				nitrite.WithAllowDebug(false),
 			},
 		},
 	}
@@ -126,7 +126,7 @@ func TestVerifier_Verify(t *testing.T) {
 			opts: []nitrite.VerifierConfigOption{
 				nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
 				nitrite.WithVerificationTime(nitrite.AttestationTime),
-				nitrite.WithDebug(false),
+				nitrite.WithAllowDebug(false),
 			},
 			attestation: nitroAttestation,
 		},
@@ -135,7 +135,7 @@ func TestVerifier_Verify(t *testing.T) {
 			opts: []nitrite.VerifierConfigOption{
 				nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
 				nitrite.WithVerificationTime(nitrite.AttestationTime),
-				nitrite.WithDebug(true),
+				nitrite.WithAllowDebug(true),
 			},
 			attestation: debugNitroAttestation,
 		},
@@ -144,7 +144,7 @@ func TestVerifier_Verify(t *testing.T) {
 			opts: []nitrite.VerifierConfigOption{
 				nitrite.WithCertProvider(nitrite.SelfSignedCertProvider),
 				nitrite.WithVerificationTime(nitrite.AttestationTime),
-				nitrite.WithDebug(false),
+				nitrite.WithAllowDebug(false),
 			},
 			attestation: selfSignedAttestation,
 		},
@@ -168,7 +168,7 @@ func TestVerifier_Verify(t *testing.T) {
 		verifier, err := nitrite.NewVerifier(
 			nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
 			nitrite.WithVerificationTime(nitrite.AttestationTime),
-			nitrite.WithDebug(false),
+			nitrite.WithAllowDebug(false),
 		)
 		require.NoError(t, err)
 
@@ -188,7 +188,7 @@ func TestVerifier_Verify(t *testing.T) {
 		verifier, err := nitrite.NewVerifier(
 			nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
 			nitrite.WithVerificationTime(nitrite.AttestationTime),
-			nitrite.WithDebug(false),
+			nitrite.WithAllowDebug(false),
 		)
 		require.NoError(t, err)
 
