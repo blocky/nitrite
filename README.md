@@ -18,12 +18,12 @@ import (
 )
 
 func verifyAttestation(attestation []byte) error {
-	res, err := nitrite.Verify(
-		attestation,
-		nitrite.MakeNitroCertProvider(),
-		nitrite.WithAttestationTime(),
-	)
-
+	verifier, err := nitrite.NewVerifier()
+	if nil != err {
+		return err
+	}
+	
+	res, err := verifier.Verify(attestation)
 	if nil != err {
 		return err
 	}
