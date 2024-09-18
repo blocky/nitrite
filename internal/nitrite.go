@@ -139,6 +139,7 @@ func Verify(
 	attestation []byte,
 	certProvider CertProvider,
 	verificationTime VerificationTimeFunc,
+	allowDebug bool,
 ) (
 	*Result,
 	error,
@@ -245,6 +246,15 @@ func Verify(
 				96 == len(value)) {
 			return nil, ErrBadPCRValue
 		}
+	}
+
+	docDebug, err := doc.Debug()
+	if err != nil {
+		return nil, fmt.Errorf("getting document debug: %w", err)
+	}
+
+	if !allowDebug && docDebug {
+		return nil, fmt.Errorf("attestation was generated in debug mode")
 	}
 
 	if !cert.IsCA && len(doc.CABundle) < 1 {

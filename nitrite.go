@@ -30,7 +30,7 @@ const (
 type VerifierConfig struct {
 	certProvider     CertProvider
 	verificationTime VerificationTime
-	debug            bool
+	allowDebug       bool
 }
 
 type VerifierConfigOption func(*VerifierConfig)
@@ -49,21 +49,21 @@ func WithVerificationTime(t VerificationTime) VerifierConfigOption {
 
 func WithDebug(debug bool) VerifierConfigOption {
 	return func(c *VerifierConfig) {
-		c.debug = debug
+		c.allowDebug = debug
 	}
 }
 
 type Verifier struct {
 	certProvider     internal.CertProvider
 	verificationTime internal.VerificationTimeFunc
-	debug            bool
+	allowDebug       bool
 }
 
 func NewVerifier(options ...VerifierConfigOption) (*Verifier, error) {
 	config := &VerifierConfig{
 		certProvider:     EmbeddedNitroCertProvider,
 		verificationTime: AttestationTime,
-		debug:            false,
+		allowDebug:       false,
 	}
 	for _, opt := range options {
 		opt(config)
@@ -104,33 +104,21 @@ func NewVerifierFromConfig(config *VerifierConfig) (*Verifier, error) {
 			fmt.Errorf("unknown verification time: %d", config.verificationTime)
 	}
 
-	verifier.debug = config.debug
+	verifier.allowDebug = config.allowDebug
 
 	return verifier, nil
 }
 
 func (v *Verifier) Verify(attestation []byte) (*Result, error) {
-	// todo: say that we're using internal.Verify for now
 	result, err := internal.Verify(
 		attestation,
 		v.certProvider,
 		v.verificationTime,
+		v.allowDebug,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("verifying attestation: %w", err)
 	}
-
-	// todo: move this to internal.Verify
-	// docDebug, err := result.Document.Debug()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("checking attestation debug: %w", err)
-	// }
-	//
-	// if !v.debug && docDebug {
-	// 	return nil, fmt.Errorf("attestation was generated in debug mode")
-	// }
-	//
-	// result.Document = (*Document)(result.Document)
 
 	return result, nil
 }
