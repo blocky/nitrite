@@ -17,8 +17,8 @@ func TestDocument_CreatedAt(t *testing.T) {
 	}{
 		{
 			"happy path",
-			uint64(nitroAttestationTime.UnixMilli()),
-			nitroAttestationTime,
+			uint64(internal.NitroAttestationTime.UnixMilli()),
+			internal.NitroAttestationTime,
 		},
 		{
 			"zero time",

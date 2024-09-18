@@ -18,48 +18,44 @@ import (
 // using hf/nsm/Send() and write the resulting bytes to a file as a base64
 // string.
 
-//go:embed testdata/nitro_attestation.b64
-var nitroAttestationB64 string
-var nitroAttestationTime = time.Date(2024, time.September, 7, 14, 37, 39, 545000000, time.UTC)
-
-//go:embed testdata/nitro_attestation_debug.b64
-var debugNitroAttestationB64 string
-var debugNitroAttestationTime = time.Date(2024, time.September, 7, 14, 38, 6, 508000000, time.UTC)
-
-//go:embed testdata/selfsigned_attestation.b64
-var selfSignedAttestationB64 string
-var selfSignedAttestationTime = time.Date(2024, time.April, 17, 18, 51, 46, 0, time.UTC)
-
 func TestNitrite_Verify(t *testing.T) {
-	nitroAttestation, err := base64.StdEncoding.DecodeString(nitroAttestationB64)
+	nitroAttestation, err := base64.StdEncoding.DecodeString(
+		internal.NitroAttestationB64,
+	)
 	require.NoError(t, err)
-	debugNitroAttestation, err := base64.StdEncoding.DecodeString(debugNitroAttestationB64)
+	debugNitroAttestation, err := base64.StdEncoding.DecodeString(
+		internal.DebugNitroAttestationB64,
+	)
 	require.NoError(t, err)
-	selfSignedAttestation, err := base64.StdEncoding.DecodeString(selfSignedAttestationB64)
+	selfSignedAttestation, err := base64.StdEncoding.DecodeString(
+		internal.SelfSignedAttestationB64,
+	)
 	require.NoError(t, err)
 
 	attestatations := map[string]struct {
 		attestation  []byte
 		time         time.Time
 		certProvider internal.CertProvider
+		allowDebug   bool
 	}{
 		"nitro": {
 			attestation: nitroAttestation,
-			time:        nitroAttestationTime,
+			time:        internal.NitroAttestationTime,
 			certProvider: internal.NewNitroCertProvider(
 				internal.NewEmbeddedRootCertZipReader(),
 			),
 		},
 		"debug": {
 			attestation: debugNitroAttestation,
-			time:        debugNitroAttestationTime,
+			time:        internal.DebugNitroAttestationTime,
 			certProvider: internal.NewNitroCertProvider(
 				internal.NewEmbeddedRootCertZipReader(),
 			),
+			allowDebug: true,
 		},
 		"self-signed": {
 			attestation:  selfSignedAttestation,
-			time:         selfSignedAttestationTime,
+			time:         internal.SelfSignedAttestationTime,
 			certProvider: internal.NewSelfSignedCertProvider(),
 		},
 	}
@@ -73,6 +69,7 @@ func TestNitrite_Verify(t *testing.T) {
 				attestatations[key].attestation,
 				attestatations[key].certProvider,
 				internal.WithAttestationTime(),
+				attestatations[key].allowDebug,
 			)
 
 			// then
@@ -99,6 +96,7 @@ func TestNitrite_Verify(t *testing.T) {
 				attestatations[key].attestation,
 				certProvider,
 				internal.WithAttestationTime(),
+				attestatations[key].allowDebug,
 			)
 
 			// then
@@ -120,6 +118,7 @@ func TestNitrite_Verify(t *testing.T) {
 				attestatations[key].attestation,
 				certProvider,
 				internal.WithAttestationTime(),
+				attestatations[key].allowDebug,
 			)
 
 			// then
@@ -140,6 +139,7 @@ func TestNitrite_Verify(t *testing.T) {
 				attestatations[key].attestation,
 				certProvider,
 				internal.WithAttestationTime(),
+				attestatations[key].allowDebug,
 			)
 
 			// then
@@ -176,6 +176,7 @@ func TestNitrite_Verify(t *testing.T) {
 					attestatations[key].attestation,
 					attestatations[key].certProvider,
 					tt.timeOpt,
+					attestatations[key].allowDebug,
 				)
 
 				// then
