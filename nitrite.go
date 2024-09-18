@@ -7,8 +7,6 @@ import (
 	"github.com/blocky/nitrite/internal"
 )
 
-// todo: test all this
-
 type Document = internal.Document
 type Result = internal.Result
 
