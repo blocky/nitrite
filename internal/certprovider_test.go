@@ -174,10 +174,11 @@ func TestNitroCertProvider_Roots(t *testing.T) {
 		// when
 		_, err := cp.Roots()
 		require.NoError(t, err)
-		_, err = cp.Roots()
+		gotRoots, err := cp.Roots()
 
 		// then
 		require.NoError(t, err)
+		assert.False(t, gotRoots.Equal(x509.NewCertPool())) // check not empty
 	})
 
 	t.Run("cannot read root certs", func(t *testing.T) {
