@@ -67,10 +67,6 @@ func NewVerifier(options ...VerifierConfigOption) (*Verifier, error) {
 		opt(config)
 	}
 
-	return NewVerifierFromConfig(config)
-}
-
-func NewVerifierFromConfig(config *VerifierConfig) (*Verifier, error) {
 	var verifier = new(Verifier)
 
 	switch config.certProvider {

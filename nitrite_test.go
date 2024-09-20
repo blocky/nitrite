@@ -88,20 +88,6 @@ func TestNewVerifier(t *testing.T) {
 	}
 }
 
-func TestNewVerifierFromConfig(t *testing.T) {
-	t.Run("happy path", func(t *testing.T) {
-		// given
-		config := &nitrite.VerifierConfig{}
-
-		// when
-		gotVerifier, err := nitrite.NewVerifierFromConfig(config)
-
-		// then
-		require.NoError(t, err)
-		require.NotEmpty(t, gotVerifier)
-	})
-}
-
 func TestVerifier_Verify(t *testing.T) {
 	nitroAttestation, err := base64.StdEncoding.DecodeString(
 		internal.NitroAttestationB64,
