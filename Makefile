@@ -14,13 +14,27 @@ test-unit: tidy
 test-integration: tidy
 	@go test -v ./test/integration/...
 
+TESTDATA=internal/testdata
+NITRITE_CMD=cmd/nitrite/main.go
 .PHONY: test-main
 test-main: tidy
-	@$(eval attestation := $(shell cat internal/testdata/nitro_attestation.b64))
-	@go run cmd/nitrite/main.go -attestation $(attestation) 1>/dev/null
-	@$(eval attestation := $(shell cat internal/testdata/nitro_attestation_debug.b64))
-	@go run cmd/nitrite/main.go -attestation $(attestation) -allowdebug true 1>/dev/null
-	@echo "ok\tcmd/nitrite/main.go"
+	@cat $(TESTDATA)/nitro_attestation.b64 | \
+		go run $(NITRITE_CMD) -attestation - 1>/dev/null
+	@cat $(TESTDATA)/nitro_attestation_debug.b64 | \
+		go run $(NITRITE_CMD) -attestation - -allowdebug 1>/dev/null
+	@$(shell cat $(TESTDATA)/nitro_attestation_debug.b64 | \
+    	go run $(NITRITE_CMD) -attestation - 2>/dev/null)
+	@if [ $(.SHELLSTATUS) -eq 0 ]; then \
+		echo "error\t$(NITRITE_CMD) should have failed without -allowdebug"; \
+		exit 1; \
+	fi
+	@echo "ok\t$(NITRITE_CMD)"
+
+
+some_recipe:
+	@echo $(shell echo 'doing stuff'; exit 123)
+	@echo 'command exited with $(.SHELLSTATUS)'
+	@exit $(.SHELLSTATUS)
 
 .PHONY: test
 test: test-unit test-main

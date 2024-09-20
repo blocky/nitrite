@@ -82,6 +82,7 @@ func TestNitrite_Verify(t *testing.T) {
 				result.Document.CreatedAt().UTC(),
 			)
 		})
+
 	}
 
 	t.Run("attestation was generated in debug mode", func(t *testing.T) {

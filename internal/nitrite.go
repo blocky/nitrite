@@ -181,6 +181,7 @@ func Verify(
 	cert, certificates, err := doc.Verify(certProvider, verificationTime)
 	if err != nil {
 		return nil, fmt.Errorf("verifying document: %w", err)
+
 	}
 
 	docDebug, err := doc.Debug()

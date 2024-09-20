@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 
@@ -22,6 +23,19 @@ func main() {
 	if "" == *fAttestation {
 		flag.PrintDefaults()
 		os.Exit(1)
+	}
+
+	if *fAttestation == "-" {
+		bytes, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			err = fmt.Errorf(
+				"reading base64 attestation string from stdin: %w",
+				err,
+			)
+			slog.Error(err.Error())
+			os.Exit(2)
+		}
+		*fAttestation = string(bytes)
 	}
 
 	attestation, err := base64.StdEncoding.DecodeString(*fAttestation)

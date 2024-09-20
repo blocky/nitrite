@@ -6,12 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/blocky/nitrite/internal"
 	"github.com/blocky/nitrite/mocks"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/blocky/nitrite/internal"
 )
 
 func initDocuments(t *testing.T) (
