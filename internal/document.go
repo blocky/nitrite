@@ -91,7 +91,6 @@ func (doc Document) CheckMandatoryFields() error {
 	if doc.Timestamp < 1 {
 		return missingFieldError("timestamp")
 	}
-	// TODO: Add PR comment asking if nil checks are needed since we use len later
 	if doc.PCRs == nil {
 		return missingFieldError("pcrs")
 	}
