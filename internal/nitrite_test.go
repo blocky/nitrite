@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -84,6 +85,62 @@ func TestNitrite_Verify(t *testing.T) {
 		})
 
 	}
+
+	t.Run("unmarshaling document", func(t *testing.T) {
+		// given
+		nitroCose := internal.CosePayload{}
+		err := cbor.Unmarshal(nitroAttestation, &nitroCose)
+		require.NoError(t, err)
+
+		nitroCose.Payload = []byte("not a valid document")
+		badNitroAttestation, err := cbor.Marshal(nitroCose)
+		require.NoError(t, err)
+
+		// when
+		_, err = internal.Verify(
+			badNitroAttestation,
+			internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
+			internal.WithAttestationTime(),
+			false,
+		)
+
+		// then
+		assert.ErrorContains(t, err, "unmarshaling document")
+	})
+
+	t.Run("verifying document", func(t *testing.T) {
+		// given
+		nitroCose := internal.CosePayload{}
+		err := cbor.Unmarshal(nitroAttestation, &nitroCose)
+		require.NoError(t, err)
+
+		nitroDoc := internal.Document{}
+		err = cbor.Unmarshal(nitroCose.Payload, &nitroDoc)
+		require.NoError(t, err)
+
+		nitroDoc.Digest = "not a valid digest"
+		badDocBytes, err := cbor.Marshal(nitroDoc)
+		require.NoError(t, err)
+
+		nitroCose.Payload = badDocBytes
+		badNitroAttestation, err := cbor.Marshal(nitroCose)
+		require.NoError(t, err)
+
+		// when
+		_, err = internal.Verify(
+			badNitroAttestation,
+			internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
+			internal.WithAttestationTime(),
+			false,
+		)
+
+		// then
+		assert.ErrorContains(t, err, "verifying document")
+	})
 
 	t.Run("attestation was generated in debug mode", func(t *testing.T) {
 		// when
