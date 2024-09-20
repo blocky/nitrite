@@ -116,7 +116,7 @@ func TestDocument_Debug(t *testing.T) {
 
 func TestDocument_Verify(t *testing.T) {
 	nitroDoc, debugNitroDoc, selfSignedDoc := initDocuments(t)
-	tests := []struct {
+	happyPathTests := []struct {
 		name         string
 		doc          internal.Document
 		certProvider internal.CertProvider
@@ -142,7 +142,7 @@ func TestDocument_Verify(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
+	for _, tt := range happyPathTests {
 		t.Run(tt.name, func(t *testing.T) {
 			// when
 			_, _, err := tt.doc.Verify(
@@ -302,8 +302,6 @@ func TestDocument_CheckMandatoryFields(t *testing.T) {
 	})
 }
 
-// TODO: Update unit tests to only use one attestation (e.g., nitro) unless
-// internal logic depends on nitro vs debug vs self-signed
 func TestDocument_CheckOptionalFields(t *testing.T) {
 	nitroDoc, _, _ := initDocuments(t)
 
