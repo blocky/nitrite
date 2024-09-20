@@ -25,6 +25,10 @@ var AWSNitroEnclavesRootZip []byte
 //go:embed assets/AWS_NitroEnclaves_Root-G1.sha256.hex
 var AWSNitroEnclavesRootSHA256Hex string
 
+type CertProvider interface {
+	Roots() (*x509.CertPool, error)
+}
+
 type UnzipAWSRootCertsFunc func(zipBytes []byte) (pemBytes []byte, err error)
 
 func UnzipAWSRootCerts(zipBytes []byte) ([]byte, error) {

@@ -1,213 +1,187 @@
 package nitrite_test
 
 import (
-	"crypto/x509"
-	_ "embed"
 	"encoding/base64"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/blocky/nitrite"
-	"github.com/blocky/nitrite/mocks"
+	"github.com/blocky/nitrite/internal"
 )
 
-// The canonical way to regenerate attestations is to request an attestation
-// using hf/nsm/Send() and write the resulting bytes to a file as a base64
-// string.
-
-//go:embed testdata/nitro_attestation.b64
-var nitroAttestationB64 string
-var nitroAttestationTime = time.Date(2024, time.September, 7, 14, 37, 39, 545000000, time.UTC)
-
-//go:embed testdata/nitro_attestation_debug.b64
-var debugNitroAttestationB64 string
-var debugNitroAttestationTime = time.Date(2024, time.September, 7, 14, 38, 6, 508000000, time.UTC)
-
-//go:embed testdata/selfsigned_attestation.b64
-var selfSignedAttestationB64 string
-var selfSignedAttestationTime = time.Date(2024, time.April, 17, 18, 51, 46, 0, time.UTC)
-
-func TestNitrite_Verify(t *testing.T) {
-	nitroAttestation, err := base64.StdEncoding.DecodeString(nitroAttestationB64)
-	require.NoError(t, err)
-	debugNitroAttestation, err := base64.StdEncoding.DecodeString(debugNitroAttestationB64)
-	require.NoError(t, err)
-	selfSignedAttestation, err := base64.StdEncoding.DecodeString(selfSignedAttestationB64)
-	require.NoError(t, err)
-
-	attestatations := map[string]struct {
-		attestation  []byte
-		time         time.Time
-		certProvider nitrite.CertProvider
+func TestNewVerifier(t *testing.T) {
+	happyPathTests := []struct {
+		name string
+		opts []nitrite.VerifierConfigOption
 	}{
-		"nitro": {
-			attestation:  nitroAttestation,
-			time:         nitroAttestationTime,
-			certProvider: nitrite.NewEmbeddedNitroCertProvider(),
+		{
+			name: "happy path - no options",
+			opts: nil,
 		},
-		"debug": {
-			attestation:  debugNitroAttestation,
-			time:         debugNitroAttestationTime,
-			certProvider: nitrite.NewEmbeddedNitroCertProvider(),
+		{
+			name: "happy path - embedded nitro cert provider",
+			opts: []nitrite.VerifierConfigOption{
+				nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
+			},
 		},
-		"self-signed": {
-			attestation:  selfSignedAttestation,
-			time:         selfSignedAttestationTime,
-			certProvider: nitrite.NewSelfSignedCertProvider(),
+		{
+			name: "happy path - self signed cert provider",
+			opts: []nitrite.VerifierConfigOption{
+				nitrite.WithCertProvider(nitrite.SelfSignedCertProvider),
+			},
+		},
+		{
+			name: "happy path - attestation time",
+			opts: []nitrite.VerifierConfigOption{
+				nitrite.WithVerificationTime(nitrite.AttestationTime),
+			},
+		},
+		{
+			name: "happy path - current time",
+			opts: []nitrite.VerifierConfigOption{
+				nitrite.WithVerificationTime(nitrite.CurrentTime),
+			},
+		},
+		{
+			name: "happy path - allow debug",
+			opts: []nitrite.VerifierConfigOption{
+				nitrite.WithAllowDebug(true),
+			},
+		},
+		{
+			name: "happy path - no debug",
+			opts: []nitrite.VerifierConfigOption{
+				nitrite.WithAllowDebug(false),
+			},
+		},
+		{
+			name: "happy path - all options",
+			opts: []nitrite.VerifierConfigOption{
+				nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
+				nitrite.WithVerificationTime(nitrite.AttestationTime),
+				nitrite.WithAllowDebug(true),
+			},
+		},
+		{
+			name: "happy path - overwriting options",
+			opts: []nitrite.VerifierConfigOption{
+				nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
+				nitrite.WithCertProvider(nitrite.SelfSignedCertProvider),
+				nitrite.WithVerificationTime(nitrite.AttestationTime),
+				nitrite.WithVerificationTime(nitrite.CurrentTime),
+				nitrite.WithAllowDebug(true),
+				nitrite.WithAllowDebug(false),
+			},
 		},
 	}
-
-	for key := range attestatations {
-		t.Run("happy path", func(t *testing.T) {
-			t.Log(key)
-
+	for _, tt := range happyPathTests {
+		t.Run(tt.name, func(t *testing.T) {
 			// when
-			result, err := nitrite.Verify(
-				attestatations[key].attestation,
-				attestatations[key].certProvider,
-				nitrite.WithAttestationTime(),
-			)
+			gotVerifier, err := nitrite.New(tt.opts...)
 
 			// then
 			require.NoError(t, err)
-			// make sure at least one of the fields is populated and attested
-			assert.Equal(
-				t,
-				attestatations[key].time.UTC(),
-				result.Document.CreatedAt().UTC(),
-			)
+			require.NotEmpty(t, gotVerifier)
 		})
-
-		t.Run("cannot get root certificates", func(t *testing.T) {
-			t.Log(key)
-
-			// given
-			certProvider := mocks.NewNitriteCertProvider(t)
-
-			// expecting
-			certProvider.EXPECT().Roots().Return(nil, assert.AnError)
-
-			// when
-			_, err := nitrite.Verify(
-				attestatations[key].attestation,
-				certProvider,
-				nitrite.WithAttestationTime(),
-			)
-
-			// then
-			assert.ErrorIs(t, err, assert.AnError)
-			assert.ErrorContains(t, err, "getting root certificates")
-		})
-
-		t.Run("unknown signing authority - nil roots", func(t *testing.T) {
-			t.Log(key)
-
-			// given
-			certProvider := mocks.NewNitriteCertProvider(t)
-
-			// expecting
-			certProvider.EXPECT().Roots().Return(nil, nil)
-
-			// when
-			_, err := nitrite.Verify(
-				attestatations[key].attestation,
-				certProvider,
-				nitrite.WithAttestationTime(),
-			)
-
-			// then
-			assert.ErrorContains(t, err, "verifying certificate")
-		})
-
-		t.Run("unknown signing authority - empty roots", func(t *testing.T) {
-			t.Log(key)
-
-			// given
-			certProvider := mocks.NewNitriteCertProvider(t)
-
-			// expecting
-			certProvider.EXPECT().Roots().Return(x509.NewCertPool(), nil)
-
-			// when
-			_, err := nitrite.Verify(
-				attestatations[key].attestation,
-				certProvider,
-				nitrite.WithAttestationTime(),
-			)
-
-			// then
-			assert.ErrorContains(t, err, "verifying certificate")
-		})
-
-		timeOutOfBoundsTests := []struct {
-			name        string
-			timeOpt     nitrite.VerificationTimeFunc
-			errContains string
-		}{
-			{
-				"certificate expired",
-				nitrite.WithTime(time.Date(10000, 0, 0, 0, 0, 0, 0, time.UTC)),
-				"verifying certificate",
-			},
-			{
-				"certificate not yet valid",
-				nitrite.WithTime(time.Date(1970, 0, 0, 0, 0, 0, 0, time.UTC)),
-				"verifying certificate",
-			},
-			{
-				"zero time",
-				nitrite.WithTime(time.Time{}),
-				"verification time is 0",
-			},
-		}
-		for _, tt := range timeOutOfBoundsTests {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Log(key)
-
-				// when
-				_, err = nitrite.Verify(
-					attestatations[key].attestation,
-					attestatations[key].certProvider,
-					tt.timeOpt,
-				)
-
-				// then
-				assert.ErrorContains(t, err, tt.errContains)
-			})
-		}
 	}
 }
 
-func TestDocument_CreatedAt(t *testing.T) {
+func TestVerifier_Verify(t *testing.T) {
+	nitroAttestation, err := base64.StdEncoding.DecodeString(
+		internal.NitroAttestationB64,
+	)
+	require.NoError(t, err)
+	debugNitroAttestation, err := base64.StdEncoding.DecodeString(
+		internal.DebugNitroAttestationB64,
+	)
+	require.NoError(t, err)
+	selfSignedAttestation, err := base64.StdEncoding.DecodeString(
+		internal.SelfSignedAttestationB64,
+	)
+	require.NoError(t, err)
+
 	happyPathTests := []struct {
-		name      string
-		timestamp uint64
-		wantTime  time.Time
+		name        string
+		opts        []nitrite.VerifierConfigOption
+		attestation []byte
 	}{
 		{
-			"happy path",
-			uint64(nitroAttestationTime.UnixMilli()),
-			nitroAttestationTime,
+			name: "happy path - embedded nitro cert provider",
+			opts: []nitrite.VerifierConfigOption{
+				nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
+				nitrite.WithVerificationTime(nitrite.AttestationTime),
+				nitrite.WithAllowDebug(false),
+			},
+			attestation: nitroAttestation,
 		},
 		{
-			"zero time",
-			uint64(0),
-			time.Time{},
+			name: "happy path - embedded nitro cert provider with debug",
+			opts: []nitrite.VerifierConfigOption{
+				nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
+				nitrite.WithVerificationTime(nitrite.AttestationTime),
+				nitrite.WithAllowDebug(true),
+			},
+			attestation: debugNitroAttestation,
+		},
+		{
+			name: "happy path - self signed cert provider",
+			opts: []nitrite.VerifierConfigOption{
+				nitrite.WithCertProvider(nitrite.SelfSignedCertProvider),
+				nitrite.WithVerificationTime(nitrite.AttestationTime),
+				nitrite.WithAllowDebug(false),
+			},
+			attestation: selfSignedAttestation,
 		},
 	}
 	for _, tt := range happyPathTests {
 		t.Run(tt.name, func(t *testing.T) {
 			// given
-			doc := nitrite.Document{Timestamp: tt.timestamp}
+			verifier, err := nitrite.New(tt.opts...)
+			require.NoError(t, err)
 
 			// when
-			gotTime := doc.CreatedAt()
+			_, err = verifier.Verify(tt.attestation)
 
 			// then
-			assert.Equal(t, tt.wantTime.UTC(), gotTime.UTC())
+			require.NoError(t, err)
 		})
 	}
+
+	t.Run("happy path - debug not allowed", func(t *testing.T) {
+		// given
+		verifier, err := nitrite.New(
+			nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
+			nitrite.WithVerificationTime(nitrite.AttestationTime),
+			nitrite.WithAllowDebug(false),
+		)
+		require.NoError(t, err)
+
+		// when
+		_, err = verifier.Verify(debugNitroAttestation)
+
+		// then
+		assert.ErrorContains(
+			t,
+			err,
+			"verifying attestation: attestation was generated in debug mode",
+		)
+	})
+
+	t.Run("cannot verify attestation", func(t *testing.T) {
+		// given
+		verifier, err := nitrite.New(
+			nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
+			nitrite.WithVerificationTime(nitrite.AttestationTime),
+			nitrite.WithAllowDebug(false),
+		)
+		require.NoError(t, err)
+
+		// when
+		_, err = verifier.Verify([]byte("invalid attestation"))
+
+		// then
+		assert.ErrorContains(t, err, "verifying attestation")
+	})
 }

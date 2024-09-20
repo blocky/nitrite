@@ -5,53 +5,66 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 
 	"github.com/blocky/nitrite"
 )
 
 var (
-	fDocument = flag.String("attestation", "", "Attestation document in standard Base64 encoding")
+	fAttestation = flag.String("attestation", "", "Attestation document in standard Base64 encoding")
+	fAllowDebug  = flag.Bool("allowdebug", false, "Allow verification of attestation generated in debug mode")
 )
 
 func main() {
 	flag.Parse()
 
-	if "" == *fDocument {
+	if "" == *fAttestation {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	attestationBytes, err := base64.StdEncoding.DecodeString(*fDocument)
-	if nil != err {
-		fmt.Println(
-			"Provided attestation is not encoded as a valid, " +
-				"standard Base64 string",
-		)
-		os.Exit(2)
-	}
-
-	res, err := nitrite.Verify(
-		attestationBytes,
-		nitrite.NewEmbeddedNitroCertProvider(),
-		nitrite.WithAttestationTime(),
-	)
-
-	resJSON := ""
-
-	if nil != res {
-		enc, err := json.Marshal(res.Document)
-		if nil != err {
-			panic(err)
+	if *fAttestation == "-" {
+		bytes, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			err = fmt.Errorf(
+				"reading base64 attestation string from stdin: %w",
+				err,
+			)
+			slog.Error(err.Error())
+			os.Exit(2)
 		}
-
-		resJSON = string(enc)
+		*fAttestation = string(bytes)
 	}
 
+	attestation, err := base64.StdEncoding.DecodeString(*fAttestation)
 	if nil != err {
-		fmt.Printf("Attestation verification failed with error %v\n", err)
+		err = fmt.Errorf("decoding attestation: %w", err)
+		slog.Error(err.Error())
 		os.Exit(2)
 	}
 
-	fmt.Printf("%v\n", resJSON)
+	verifier, err := nitrite.New(nitrite.WithAllowDebug(*fAllowDebug))
+	if err != nil {
+		err = fmt.Errorf("creating verifier: %w", err)
+		slog.Error(err.Error())
+		os.Exit(2)
+	}
+
+	res, err := verifier.Verify(attestation)
+	if err != nil {
+		err = fmt.Errorf("verifying attestation: %w", err)
+		slog.Error(err.Error())
+		os.Exit(2)
+	}
+
+	enc, err := json.Marshal(res.Document)
+	if err != nil {
+		err = fmt.Errorf("marshalling attestation: %w", err)
+		slog.Error(err.Error())
+		os.Exit(2)
+	}
+
+	fmt.Printf("%v\n", string(enc))
 }
