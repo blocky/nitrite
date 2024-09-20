@@ -1,9 +1,7 @@
 package internal
 
 import (
-	"encoding/hex"
 	"fmt"
-	"strconv"
 	"time"
 )
 
@@ -49,9 +47,10 @@ func (doc Document) Debug() (bool, error) {
 		return false, fmt.Errorf("PCR0 not found")
 	}
 
-	pcr0Int, err := strconv.Atoi(hex.EncodeToString(pcr0))
-
-	debug := err == nil && pcr0Int == 0
-
-	return debug, nil
+	for _, x := range pcr0 {
+		if x != 0 {
+			return false, nil
+		}
+	}
+	return true, nil
 }
