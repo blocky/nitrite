@@ -57,7 +57,7 @@ type Verifier struct {
 	allowDebug       bool
 }
 
-func NewVerifier(options ...VerifierConfigOption) (*Verifier, error) {
+func New(options ...VerifierConfigOption) (*Verifier, error) {
 	config := &VerifierConfig{
 		certProvider:     EmbeddedNitroCertProvider,
 		verificationTime: AttestationTime,

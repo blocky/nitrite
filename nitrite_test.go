@@ -79,7 +79,7 @@ func TestNewVerifier(t *testing.T) {
 	for _, tt := range happyPathTests {
 		t.Run(tt.name, func(t *testing.T) {
 			// when
-			gotVerifier, err := nitrite.NewVerifier(tt.opts...)
+			gotVerifier, err := nitrite.New(tt.opts...)
 
 			// then
 			require.NoError(t, err)
@@ -138,7 +138,7 @@ func TestVerifier_Verify(t *testing.T) {
 	for _, tt := range happyPathTests {
 		t.Run(tt.name, func(t *testing.T) {
 			// given
-			verifier, err := nitrite.NewVerifier(tt.opts...)
+			verifier, err := nitrite.New(tt.opts...)
 			require.NoError(t, err)
 
 			// when
@@ -151,7 +151,7 @@ func TestVerifier_Verify(t *testing.T) {
 
 	t.Run("happy path - debug not allowed", func(t *testing.T) {
 		// given
-		verifier, err := nitrite.NewVerifier(
+		verifier, err := nitrite.New(
 			nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
 			nitrite.WithVerificationTime(nitrite.AttestationTime),
 			nitrite.WithAllowDebug(false),
@@ -171,7 +171,7 @@ func TestVerifier_Verify(t *testing.T) {
 
 	t.Run("cannot verify attestation", func(t *testing.T) {
 		// given
-		verifier, err := nitrite.NewVerifier(
+		verifier, err := nitrite.New(
 			nitrite.WithCertProvider(nitrite.EmbeddedNitroCertProvider),
 			nitrite.WithVerificationTime(nitrite.AttestationTime),
 			nitrite.WithAllowDebug(false),

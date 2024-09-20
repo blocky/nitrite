@@ -31,7 +31,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	verifier, err := nitrite.NewVerifier(nitrite.WithAllowDebug(*fAllowDebug))
+	verifier, err := nitrite.New(nitrite.WithAllowDebug(*fAllowDebug))
 	if err != nil {
 		err = fmt.Errorf("creating verifier: %w", err)
 		slog.Error(err.Error())
