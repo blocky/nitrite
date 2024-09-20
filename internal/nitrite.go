@@ -36,7 +36,7 @@ func (h *CoseHeader) AlgorithmInt() (int64, bool) {
 	return 0, false
 }
 
-type cosePayload struct {
+type CosePayload struct {
 	_ struct{} `cbor:",toarray"`
 
 	Protected   []byte
@@ -119,7 +119,7 @@ func Verify(
 	*Result,
 	error,
 ) {
-	cose := cosePayload{}
+	cose := CosePayload{}
 
 	err := cbor.Unmarshal(attestation, &cose)
 	if nil != err {

@@ -1,13 +1,53 @@
 package internal_test
 
 import (
+	"crypto/x509"
+	"encoding/base64"
 	"testing"
 	"time"
 
+	"github.com/blocky/nitrite/mocks"
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/blocky/nitrite/internal"
 )
+
+func initDocuments(t *testing.T) (
+	internal.Document,
+	internal.Document,
+	internal.Document,
+) {
+	nitroAttestation, err := base64.StdEncoding.DecodeString(nitroAttestationB64)
+	require.NoError(t, err)
+	debugNitroAttestation, err := base64.StdEncoding.DecodeString(debugNitroAttestationB64)
+	require.NoError(t, err)
+	selfSignedAttestation, err := base64.StdEncoding.DecodeString(selfSignedAttestationB64)
+	require.NoError(t, err)
+
+	nitroCosePayload := internal.CosePayload{}
+	err = cbor.Unmarshal(nitroAttestation, &nitroCosePayload)
+	require.NoError(t, err)
+	debugNitroCosePayload := internal.CosePayload{}
+	err = cbor.Unmarshal(debugNitroAttestation, &debugNitroCosePayload)
+	require.NoError(t, err)
+	selfSignedCosePayload := internal.CosePayload{}
+	err = cbor.Unmarshal(selfSignedAttestation, &selfSignedCosePayload)
+	require.NoError(t, err)
+
+	nitroDoc := internal.Document{}
+	err = cbor.Unmarshal(nitroCosePayload.Payload, &nitroDoc)
+	require.NoError(t, err)
+	debugNitroDoc := internal.Document{}
+	err = cbor.Unmarshal(debugNitroCosePayload.Payload, &debugNitroDoc)
+	require.NoError(t, err)
+	selfSignedDoc := internal.Document{}
+	err = cbor.Unmarshal(selfSignedCosePayload.Payload, &selfSignedDoc)
+	require.NoError(t, err)
+
+	return nitroDoc, debugNitroDoc, selfSignedDoc
+}
 
 func TestDocument_CreatedAt(t *testing.T) {
 	happyPathTests := []struct {
@@ -72,5 +112,452 @@ func TestDocument_Debug(t *testing.T) {
 
 		// then
 		assert.ErrorContains(t, err, "PCR0 not found")
+	})
+}
+
+func TestDocument_Verify(t *testing.T) {
+	nitroDoc, debugNitroDoc, selfSignedDoc := initDocuments(t)
+	tests := []struct {
+		name         string
+		doc          internal.Document
+		certProvider internal.CertProvider
+	}{
+		{
+			name: "happy path - nitro",
+			doc:  nitroDoc,
+			certProvider: internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
+		},
+		{
+			name: "happy path - debug nitro",
+			doc:  debugNitroDoc,
+			certProvider: internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
+		},
+		{
+			name:         "happy path - self signed",
+			doc:          selfSignedDoc,
+			certProvider: internal.NewSelfSignedCertProvider(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			_, _, err := tt.doc.Verify(
+				tt.certProvider,
+				internal.WithAttestationTime(),
+			)
+
+			// then
+			require.NoError(t, err)
+		})
+	}
+}
+func TestDocument_CheckMandatoryFields(t *testing.T) {
+	nitroDoc, _, _ := initDocuments(t)
+
+	t.Run("happy path", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+
+		// when
+		err := doc.CheckMandatoryFields()
+
+		// then
+		assert.NoError(t, err)
+	})
+
+	t.Run("missing module id", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.ModuleID = ""
+
+		// when
+		err := doc.CheckMandatoryFields()
+
+		// then
+		assert.ErrorContains(t, err, "missing module id")
+	})
+
+	t.Run("missing digest", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.Digest = ""
+
+		// when
+		err := doc.CheckMandatoryFields()
+
+		// then
+		assert.ErrorContains(t, err, "missing digest")
+	})
+
+	t.Run("missing timestamp", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.Timestamp = 0
+
+		// when
+		err := doc.CheckMandatoryFields()
+
+		// then
+		assert.ErrorContains(t, err, "missing timestamp")
+	})
+
+	t.Run("missing pcrs", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.PCRs = nil
+
+		// when
+		err := doc.CheckMandatoryFields()
+
+		// then
+		assert.ErrorContains(t, err, "missing pcrs")
+	})
+
+	t.Run("missing certificate", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.Certificate = nil
+
+		// when
+		err := doc.CheckMandatoryFields()
+
+		// then
+		assert.ErrorContains(t, err, "missing certificate")
+	})
+
+	t.Run("wrong digest type", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.Digest = "wrong"
+
+		// when
+		err := doc.CheckMandatoryFields()
+
+		// then
+		assert.ErrorContains(t, err, "expected 'SHA384' digest but got")
+	})
+
+	t.Run("too few pcrs", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.PCRs = make(map[uint][]byte, 0)
+
+		// when
+		err := doc.CheckMandatoryFields()
+
+		// then
+		assert.ErrorContains(t, err, "expected 1 to 32 pcrs but got")
+	})
+
+	t.Run("too many pcrs", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.PCRs = make(map[uint][]byte, 33)
+
+		// when
+		err := doc.CheckMandatoryFields()
+
+		// then
+		assert.ErrorContains(t, err, "expected 1 to 32 pcrs but got")
+	})
+
+	t.Run("pcr key out of range", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.PCRs = map[uint][]byte{33: nil}
+
+		// when
+		err := doc.CheckMandatoryFields()
+
+		// then
+		assert.ErrorContains(t, err, "is out of range")
+	})
+
+	t.Run("pcr is nil", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.PCRs = map[uint][]byte{0: nil}
+
+		// when
+		err := doc.CheckMandatoryFields()
+
+		// then
+		assert.ErrorContains(t, err, "is nil")
+	})
+
+	t.Run("pcr incorrect length", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.PCRs = map[uint][]byte{0: make([]byte, 1)}
+
+		// when
+		err := doc.CheckMandatoryFields()
+
+		// then
+		assert.ErrorContains(t, err, "expected pcr len")
+	})
+}
+
+// TODO: Update unit tests to only use one attestation (e.g., nitro) unless
+// internal logic depends on nitro vs debug vs self-signed
+func TestDocument_CheckOptionalFields(t *testing.T) {
+	nitroDoc, _, _ := initDocuments(t)
+
+	t.Run("happy path", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+
+		// when
+		err := doc.CheckOptionalFields()
+
+		// then
+		assert.NoError(t, err)
+	})
+
+	t.Run("public key too long", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.PublicKey = make([]byte, 1025)
+
+		// when
+		err := doc.CheckOptionalFields()
+
+		// then
+		assert.ErrorContains(t, err, "max public key len is")
+	})
+
+	t.Run("user data too long", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.UserData = make([]byte, 1025)
+
+		// when
+		err := doc.CheckOptionalFields()
+
+		// then
+		assert.ErrorContains(t, err, "max user data len is")
+	})
+
+	t.Run("nonce too long", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.Nonce = make([]byte, 1025)
+
+		// when
+		err := doc.CheckOptionalFields()
+
+		// then
+		assert.ErrorContains(t, err, "max nonce len is")
+	})
+}
+
+func TestDocument_CheckCertificates(t *testing.T) {
+	nitroDoc, debugNitroDoc, selfSignedDoc := initDocuments(t)
+	documents := map[string]struct {
+		doc          internal.Document
+		time         time.Time
+		certProvider internal.CertProvider
+	}{
+		"nitro": {
+			doc: nitroDoc,
+			certProvider: internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
+		},
+		"debug": {
+			doc: debugNitroDoc,
+			certProvider: internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
+		},
+		"self-signed": {
+			doc:          selfSignedDoc,
+			certProvider: internal.NewSelfSignedCertProvider(),
+		},
+	}
+
+	for key := range documents {
+		t.Run("happy path", func(t *testing.T) {
+			t.Log(key)
+
+			// when
+			_, _, err := documents[key].doc.CheckCertificates(
+				documents[key].certProvider,
+				internal.WithAttestationTime(),
+			)
+
+			// then
+			require.NoError(t, err)
+		})
+
+		t.Run("cannot get root certificates", func(t *testing.T) {
+			t.Log(key)
+
+			// given
+			certProvider := mocks.NewNitriteCertProvider(t)
+
+			// expecting
+			certProvider.EXPECT().Roots().Return(nil, assert.AnError)
+
+			// when
+			_, _, err := documents[key].doc.CheckCertificates(
+				certProvider,
+				internal.WithAttestationTime(),
+			)
+
+			// then
+			assert.ErrorIs(t, err, assert.AnError)
+			assert.ErrorContains(t, err, "getting root certificates")
+		})
+
+		t.Run("unknown signing authority - nil roots", func(t *testing.T) {
+			t.Log(key)
+
+			// given
+			certProvider := mocks.NewNitriteCertProvider(t)
+
+			// expecting
+			certProvider.EXPECT().Roots().Return(nil, nil)
+
+			// when
+			_, _, err := documents[key].doc.CheckCertificates(
+				certProvider,
+				internal.WithAttestationTime(),
+			)
+
+			// then
+			assert.ErrorContains(t, err, "verifying certificate")
+		})
+
+		t.Run("unknown signing authority - empty roots", func(t *testing.T) {
+			t.Log(key)
+
+			// given
+			certProvider := mocks.NewNitriteCertProvider(t)
+
+			// expecting
+			certProvider.EXPECT().Roots().Return(x509.NewCertPool(), nil)
+
+			// when
+			_, _, err := documents[key].doc.CheckCertificates(
+				certProvider,
+				internal.WithAttestationTime(),
+			)
+
+			// then
+			assert.ErrorContains(t, err, "verifying certificate")
+		})
+
+		timeOutOfBoundsTests := []struct {
+			name        string
+			timeOpt     internal.VerificationTimeFunc
+			errContains string
+		}{
+			{
+				"certificate expired",
+				internal.WithTime(time.Date(10000, 0, 0, 0, 0, 0, 0, time.UTC)),
+				"verifying certificate",
+			},
+			{
+				"certificate not yet valid",
+				internal.WithTime(time.Date(1970, 0, 0, 0, 0, 0, 0, time.UTC)),
+				"verifying certificate",
+			},
+			{
+				"zero time",
+				internal.WithTime(time.Time{}),
+				"verification time is 0",
+			},
+		}
+		for _, tt := range timeOutOfBoundsTests {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Log(key)
+
+				// when
+				_, _, err := documents[key].doc.CheckCertificates(
+					documents[key].certProvider,
+					tt.timeOpt,
+				)
+
+				// then
+				assert.ErrorContains(t, err, tt.errContains)
+			})
+		}
+	}
+
+	t.Run("parsing cert", func(t *testing.T) {
+		// given
+		doc := internal.Document{}
+
+		// when
+		_, _, err := doc.CheckCertificates(nil, nil)
+
+		// then
+		assert.ErrorContains(t, err, "parsing cert")
+	})
+
+	t.Run("missing cabundle", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.CABundle = nil
+
+		// when
+		_, _, err := doc.CheckCertificates(nil, nil)
+
+		// then
+		assert.ErrorContains(t, err, "missing cabundle")
+	})
+
+	t.Run("missing cabundle item", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.CABundle = [][]byte{nil}
+
+		// when
+		_, _, err := doc.CheckCertificates(nil, nil)
+
+		// then
+		assert.ErrorContains(t, err, "cabundle item")
+	})
+
+	t.Run("cabundle item too short", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.CABundle = [][]byte{make([]byte, 0)}
+
+		// when
+		_, _, err := doc.CheckCertificates(nil, nil)
+
+		// then
+		assert.ErrorContains(t, err, "cabundle item")
+	})
+
+	t.Run("cabundle item too long", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.CABundle = [][]byte{make([]byte, 1025)}
+
+		// when
+		_, _, err := doc.CheckCertificates(nil, nil)
+
+		// then
+		assert.ErrorContains(t, err, "cabundle item")
+	})
+
+	t.Run("parsing intermediate", func(t *testing.T) {
+		// given
+		doc := nitroDoc
+		doc.CABundle = [][]byte{make([]byte, 1)}
+
+		// when
+		_, _, err := doc.CheckCertificates(nil, nil)
+
+		// then
+		assert.ErrorContains(t, err, "parsing intermediate")
 	})
 }

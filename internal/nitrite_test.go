@@ -1,7 +1,6 @@
 package internal_test
 
 import (
-	"crypto/x509"
 	_ "embed"
 	"encoding/base64"
 	"testing"
@@ -11,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/blocky/nitrite/internal"
-	"github.com/blocky/nitrite/mocks"
 )
 
 // The canonical way to regenerate attestations is to request an attestation
@@ -38,40 +36,43 @@ func TestNitrite_Verify(t *testing.T) {
 	selfSignedAttestation, err := base64.StdEncoding.DecodeString(selfSignedAttestationB64)
 	require.NoError(t, err)
 
-	attestatations := map[string]struct {
+	tests := []struct {
+		name         string
 		attestation  []byte
 		time         time.Time
 		certProvider internal.CertProvider
 	}{
-		"nitro": {
+		{
+			name:        "happy path - nitro",
 			attestation: nitroAttestation,
 			time:        nitroAttestationTime,
 			certProvider: internal.NewNitroCertProvider(
 				internal.NewEmbeddedRootCertZipReader(),
 			),
 		},
-		"debug": {
+		{
+			name:        "happy path - debug nitro",
 			attestation: debugNitroAttestation,
 			time:        debugNitroAttestationTime,
 			certProvider: internal.NewNitroCertProvider(
 				internal.NewEmbeddedRootCertZipReader(),
 			),
 		},
-		"self-signed": {
+		{
+			name:         "happy path - self signed",
 			attestation:  selfSignedAttestation,
 			time:         selfSignedAttestationTime,
 			certProvider: internal.NewSelfSignedCertProvider(),
 		},
 	}
 
-	for key := range attestatations {
-		t.Run("happy path", func(t *testing.T) {
-			t.Log(key)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 
 			// when
 			result, err := internal.Verify(
-				attestatations[key].attestation,
-				attestatations[key].certProvider,
+				tt.attestation,
+				tt.certProvider,
 				internal.WithAttestationTime(),
 			)
 
@@ -80,107 +81,9 @@ func TestNitrite_Verify(t *testing.T) {
 			// make sure at least one of the fields is populated and attested
 			assert.Equal(
 				t,
-				attestatations[key].time.UTC(),
+				tt.time.UTC(),
 				result.Document.CreatedAt().UTC(),
 			)
 		})
-
-		t.Run("cannot get root certificates", func(t *testing.T) {
-			t.Log(key)
-
-			// given
-			certProvider := mocks.NewNitriteCertProvider(t)
-
-			// expecting
-			certProvider.EXPECT().Roots().Return(nil, assert.AnError)
-
-			// when
-			_, err := internal.Verify(
-				attestatations[key].attestation,
-				certProvider,
-				internal.WithAttestationTime(),
-			)
-
-			// then
-			assert.ErrorIs(t, err, assert.AnError)
-			assert.ErrorContains(t, err, "getting root certificates")
-		})
-
-		t.Run("unknown signing authority - nil roots", func(t *testing.T) {
-			t.Log(key)
-
-			// given
-			certProvider := mocks.NewNitriteCertProvider(t)
-
-			// expecting
-			certProvider.EXPECT().Roots().Return(nil, nil)
-
-			// when
-			_, err := internal.Verify(
-				attestatations[key].attestation,
-				certProvider,
-				internal.WithAttestationTime(),
-			)
-
-			// then
-			assert.ErrorContains(t, err, "verifying certificate")
-		})
-
-		t.Run("unknown signing authority - empty roots", func(t *testing.T) {
-			t.Log(key)
-
-			// given
-			certProvider := mocks.NewNitriteCertProvider(t)
-
-			// expecting
-			certProvider.EXPECT().Roots().Return(x509.NewCertPool(), nil)
-
-			// when
-			_, err := internal.Verify(
-				attestatations[key].attestation,
-				certProvider,
-				internal.WithAttestationTime(),
-			)
-
-			// then
-			assert.ErrorContains(t, err, "verifying certificate")
-		})
-
-		timeOutOfBoundsTests := []struct {
-			name        string
-			timeOpt     internal.VerificationTimeFunc
-			errContains string
-		}{
-			{
-				"certificate expired",
-				internal.WithTime(time.Date(10000, 0, 0, 0, 0, 0, 0, time.UTC)),
-				"verifying certificate",
-			},
-			{
-				"certificate not yet valid",
-				internal.WithTime(time.Date(1970, 0, 0, 0, 0, 0, 0, time.UTC)),
-				"verifying certificate",
-			},
-			{
-				"zero time",
-				internal.WithTime(time.Time{}),
-				"verification time is 0",
-			},
-		}
-		for _, tt := range timeOutOfBoundsTests {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Log(key)
-
-				// when
-				_, err = internal.Verify(
-					attestatations[key].attestation,
-					attestatations[key].certProvider,
-					tt.timeOpt,
-				)
-
-				// then
-				assert.ErrorContains(t, err, tt.errContains)
-			})
-		}
 	}
 }

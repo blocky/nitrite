@@ -92,6 +92,7 @@ func (doc Document) CheckMandatoryFields() error {
 	if doc.Timestamp < 1 {
 		return missingFieldError("timestamp")
 	}
+	// TODO: Add PR comment asking if nil checks are needed since we use len later
 	if doc.PCRs == nil {
 		return missingFieldError("pcrs")
 	}
@@ -110,7 +111,6 @@ func (doc Document) CheckMandatoryFields() error {
 			return fmt.Errorf("pcr key '%v' is out of range [0, 31]", key)
 		}
 
-		// TODO: Do I need this nil check even though we len check after?
 		if value == nil {
 			return fmt.Errorf("pcr value for key '%v' is nil", key)
 		}
@@ -166,20 +166,12 @@ func (doc Document) CheckCertificates(
 
 	// TODO: remove the support for self-signed attestations as part of
 	//  https://blocky.atlassian.net/browse/BKY-5620 (remove !cert.IsCA path)
-	if !cert.IsCA && nil == doc.CABundle {
-		return nil, nil, missingFieldError("cabundle")
-	}
-
 	if !cert.IsCA && len(doc.CABundle) < 1 {
-		return nil, nil, fmt.Errorf("expected cabundle but len is 0")
+		return nil, nil, missingFieldError("cabundle")
 	}
 
 	if !cert.IsCA {
 		for i, item := range doc.CABundle {
-			// TODO: Do I need this nil check since it is just a byte array?
-			if item == nil {
-				return nil, nil, fmt.Errorf("cabundle item '%v' is nil", i)
-			}
 			if len(item) < 1 || len(item) > 1024 {
 				return nil, nil, fmt.Errorf(
 					"cabundle item '%v' expected len is [1, 1024] but got '%v'",
