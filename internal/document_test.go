@@ -19,11 +19,11 @@ func initDocuments(t *testing.T) (
 	internal.Document,
 	internal.Document,
 ) {
-	nitroAttestation, err := base64.StdEncoding.DecodeString(nitroAttestationB64)
+	nitroAttestation, err := base64.StdEncoding.DecodeString(internal.NitroAttestationB64)
 	require.NoError(t, err)
-	debugNitroAttestation, err := base64.StdEncoding.DecodeString(debugNitroAttestationB64)
+	debugNitroAttestation, err := base64.StdEncoding.DecodeString(internal.DebugNitroAttestationB64)
 	require.NoError(t, err)
-	selfSignedAttestation, err := base64.StdEncoding.DecodeString(selfSignedAttestationB64)
+	selfSignedAttestation, err := base64.StdEncoding.DecodeString(internal.SelfSignedAttestationB64)
 	require.NoError(t, err)
 
 	nitroCosePayload := internal.CosePayload{}
@@ -57,8 +57,8 @@ func TestDocument_CreatedAt(t *testing.T) {
 	}{
 		{
 			"happy path",
-			uint64(nitroAttestationTime.UnixMilli()),
-			nitroAttestationTime,
+			uint64(internal.NitroAttestationTime.UnixMilli()),
+			internal.NitroAttestationTime,
 		},
 		{
 			"zero time",

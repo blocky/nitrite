@@ -115,6 +115,7 @@ func Verify(
 	attestation []byte,
 	certProvider CertProvider,
 	verificationTime VerificationTimeFunc,
+	allowDebug bool,
 ) (
 	*Result,
 	error,
@@ -180,6 +181,15 @@ func Verify(
 	cert, certificates, err := doc.Verify(certProvider, verificationTime)
 	if err != nil {
 		return nil, fmt.Errorf("verifying document: %w", err)
+	}
+
+	docDebug, err := doc.Debug()
+	if err != nil {
+		return nil, fmt.Errorf("getting document debug: %w", err)
+	}
+
+	if !allowDebug && docDebug {
+		return nil, fmt.Errorf("attestation was generated in debug mode")
 	}
 
 	coseSig := coseSignature{

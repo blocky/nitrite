@@ -12,12 +12,14 @@ test-unit: tidy
 
 .PHONY: test-integration
 test-integration: tidy
-	@go test -v -tags=integration ./test/integration/...
+	@go test -v ./test/integration/...
 
 .PHONY: test-main
 test-main: tidy
 	@$(eval attestation := $(shell cat internal/testdata/nitro_attestation.b64))
 	@go run cmd/nitrite/main.go -attestation $(attestation) 1>/dev/null
+	@$(eval attestation := $(shell cat internal/testdata/nitro_attestation_debug.b64))
+	@go run cmd/nitrite/main.go -attestation $(attestation) -allowdebug true 1>/dev/null
 	@echo "ok\tcmd/nitrite/main.go"
 
 .PHONY: test
