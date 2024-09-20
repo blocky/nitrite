@@ -184,4 +184,17 @@ func TestNitrite_Verify(t *testing.T) {
 			})
 		}
 	}
+
+	t.Run("attestation was generated in debug mode", func(t *testing.T) {
+		// when
+		_, err := internal.Verify(
+			attestatations["debug"].attestation,
+			attestatations["debug"].certProvider,
+			internal.WithAttestationTime(),
+			false,
+		)
+
+		// then
+		assert.ErrorContains(t, err, "attestation was generated in debug mode")
+	})
 }
