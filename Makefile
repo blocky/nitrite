@@ -23,9 +23,8 @@ test-main: tidy
 .PHONY: test
 test: test-unit test-main
 
-# TODO: Add mock to pre-pr?
 .PHONY: pre-pr
-pre-pr: lint test
+pre-pr: lint mock test
 
 .PHONY: mock
 mock: tidy

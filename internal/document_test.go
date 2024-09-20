@@ -399,7 +399,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 			t.Log(key)
 
 			// given
-			certProvider := mocks.NewNitriteCertProvider(t)
+			certProvider := mocks.NewInternalCertProvider(t)
 
 			// expecting
 			certProvider.EXPECT().Roots().Return(nil, assert.AnError)
@@ -419,7 +419,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 			t.Log(key)
 
 			// given
-			certProvider := mocks.NewNitriteCertProvider(t)
+			certProvider := mocks.NewInternalCertProvider(t)
 
 			// expecting
 			certProvider.EXPECT().Roots().Return(nil, nil)
@@ -438,7 +438,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 			t.Log(key)
 
 			// given
-			certProvider := mocks.NewNitriteCertProvider(t)
+			certProvider := mocks.NewInternalCertProvider(t)
 
 			// expecting
 			certProvider.EXPECT().Roots().Return(x509.NewCertPool(), nil)
