@@ -31,16 +31,11 @@ test-main: tidy
 	@echo "ok\t$(NITRITE_CMD)"
 
 
-some_recipe:
-	@echo $(shell echo 'doing stuff'; exit 123)
-	@echo 'command exited with $(.SHELLSTATUS)'
-	@exit $(.SHELLSTATUS)
-
 .PHONY: test
 test: test-unit test-main
 
 .PHONY: pre-pr
-pre-pr: lint mock test
+pre-pr: mock lint test
 
 .PHONY: mock
 mock: tidy
