@@ -183,6 +183,9 @@ func Verify(
 		return nil, fmt.Errorf("verifying document: %w", err)
 
 	}
+	if len(certificates) < 1 {
+		return nil, fmt.Errorf("certificates chain is empty")
+	}
 
 	docDebug, err := doc.Debug()
 	if err != nil {
