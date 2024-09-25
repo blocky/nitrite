@@ -18,34 +18,25 @@ func initDocuments(t *testing.T) (
 	internal.Document,
 	internal.Document,
 ) {
-	nitroAttestation, err := base64.StdEncoding.DecodeString(internal.NitroAttestationB64)
-	require.NoError(t, err)
-	debugNitroAttestation, err := base64.StdEncoding.DecodeString(internal.DebugNitroAttestationB64)
-	require.NoError(t, err)
-	selfSignedAttestation, err := base64.StdEncoding.DecodeString(internal.SelfSignedAttestationB64)
-	require.NoError(t, err)
+	attb64Strings := []string{
+		internal.NitroAttestationB64,
+		internal.DebugNitroAttestationB64,
+		internal.SelfSignedAttestationB64,
+	}
+	docs := make([]internal.Document, len(attb64Strings))
 
-	nitroCosePayload := internal.CosePayload{}
-	err = cbor.Unmarshal(nitroAttestation, &nitroCosePayload)
-	require.NoError(t, err)
-	debugNitroCosePayload := internal.CosePayload{}
-	err = cbor.Unmarshal(debugNitroAttestation, &debugNitroCosePayload)
-	require.NoError(t, err)
-	selfSignedCosePayload := internal.CosePayload{}
-	err = cbor.Unmarshal(selfSignedAttestation, &selfSignedCosePayload)
-	require.NoError(t, err)
+	for i, att64String := range attb64Strings {
+		attestation, err := base64.StdEncoding.DecodeString(att64String)
+		require.NoError(t, err)
 
-	nitroDoc := internal.Document{}
-	err = cbor.Unmarshal(nitroCosePayload.Payload, &nitroDoc)
-	require.NoError(t, err)
-	debugNitroDoc := internal.Document{}
-	err = cbor.Unmarshal(debugNitroCosePayload.Payload, &debugNitroDoc)
-	require.NoError(t, err)
-	selfSignedDoc := internal.Document{}
-	err = cbor.Unmarshal(selfSignedCosePayload.Payload, &selfSignedDoc)
-	require.NoError(t, err)
+		cosePayload := internal.CosePayload{}
+		err = cbor.Unmarshal(attestation, &cosePayload)
+		require.NoError(t, err)
 
-	return nitroDoc, debugNitroDoc, selfSignedDoc
+		err = cbor.Unmarshal(cosePayload.Payload, &docs[i])
+		require.NoError(t, err)
+	}
+	return docs[0], docs[1], docs[2]
 }
 
 func TestDocument_CreatedAt(t *testing.T) {
@@ -156,18 +147,34 @@ func TestDocument_Verify(t *testing.T) {
 	}
 }
 func TestDocument_CheckMandatoryFields(t *testing.T) {
-	nitroDoc, _, _ := initDocuments(t)
+	nitroDoc, debugNitroDoc, selfSignedDoc := initDocuments(t)
+	happyPathTests := []struct {
+		name string
+		doc  internal.Document
+	}{
+		{
+			name: "happy path - nitro",
+			doc:  nitroDoc,
+		},
+		{
+			name: "happy path - debug nitro",
+			doc:  debugNitroDoc,
+		},
+		{
+			name: "happy path - self signed",
+			doc:  selfSignedDoc,
+		},
+	}
 
-	t.Run("happy path", func(t *testing.T) {
-		// given
-		doc := nitroDoc
+	for _, tt := range happyPathTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			err := tt.doc.CheckMandatoryFields()
 
-		// when
-		err := doc.CheckMandatoryFields()
-
-		// then
-		assert.NoError(t, err)
-	})
+			// then
+			require.NoError(t, err)
+		})
+	}
 
 	t.Run("missing module id", func(t *testing.T) {
 		// given
@@ -303,18 +310,34 @@ func TestDocument_CheckMandatoryFields(t *testing.T) {
 }
 
 func TestDocument_CheckOptionalFields(t *testing.T) {
-	nitroDoc, _, _ := initDocuments(t)
+	nitroDoc, debugNitroDoc, selfSignedDoc := initDocuments(t)
+	happyPathTests := []struct {
+		name string
+		doc  internal.Document
+	}{
+		{
+			name: "happy path - nitro",
+			doc:  nitroDoc,
+		},
+		{
+			name: "happy path - debug nitro",
+			doc:  debugNitroDoc,
+		},
+		{
+			name: "happy path - self signed",
+			doc:  selfSignedDoc,
+		},
+	}
 
-	t.Run("happy path", func(t *testing.T) {
-		// given
-		doc := nitroDoc
+	for _, tt := range happyPathTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// when
+			err := tt.doc.CheckOptionalFields()
 
-		// when
-		err := doc.CheckOptionalFields()
-
-		// then
-		assert.NoError(t, err)
-	})
+			// then
+			require.NoError(t, err)
+		})
+	}
 
 	t.Run("public key too long", func(t *testing.T) {
 		// given
