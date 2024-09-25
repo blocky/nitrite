@@ -59,22 +59,22 @@ func (doc Document) Debug() (bool, error) {
 func (doc Document) Verify(
 	certProvider CertProvider,
 	verificationTime VerificationTimeFunc,
-) (*x509.Certificate, []*x509.Certificate, error) {
+) ([]*x509.Certificate, error) {
 	err := doc.CheckMandatoryFields()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	err = doc.CheckOptionalFields()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	cert, certificates, err := doc.CheckCertificates(certProvider, verificationTime)
+	certificates, err := doc.CheckCertificates(certProvider, verificationTime)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return cert, certificates, nil
+	return certificates, nil
 }
 
 func missingFieldError(field string) error {
@@ -156,22 +156,22 @@ func (doc Document) CheckOptionalFields() error {
 func (doc Document) CheckCertificates(
 	certProvider CertProvider,
 	verificationTime VerificationTimeFunc,
-) (*x509.Certificate, []*x509.Certificate, error) {
+) ([]*x509.Certificate, error) {
 	cert, err := x509.ParseCertificate(doc.Certificate)
 	if nil != err {
-		return nil, nil, fmt.Errorf("parsing cert: %w", err)
+		return nil, fmt.Errorf("parsing cert: %w", err)
 	}
 
 	// TODO: remove the support for self-signed attestations as part of
 	//  https://blocky.atlassian.net/browse/BKY-5620 (remove !cert.IsCA path)
 	if !cert.IsCA && len(doc.CABundle) < 1 {
-		return nil, nil, missingFieldError("cabundle")
+		return nil, missingFieldError("cabundle")
 	}
 
 	if !cert.IsCA {
 		for i, item := range doc.CABundle {
 			if len(item) < 1 || len(item) > 1024 {
-				return nil, nil, fmt.Errorf(
+				return nil, fmt.Errorf(
 					"cabundle item '%v' expected len is [1, 1024] but got '%v'",
 					i,
 					len(item),
@@ -181,7 +181,7 @@ func (doc Document) CheckCertificates(
 	}
 
 	if cert.PublicKeyAlgorithm != x509.ECDSA {
-		return nil, nil, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"expected public key algo '%v' but got '%v'",
 			x509.ECDSA,
 			cert.PublicKeyAlgorithm,
@@ -189,7 +189,7 @@ func (doc Document) CheckCertificates(
 	}
 
 	if cert.SignatureAlgorithm != x509.ECDSAWithSHA384 {
-		return nil, nil, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"expected signing algo '%v' but got '%v'",
 			x509.ECDSAWithSHA384,
 			cert.SignatureAlgorithm,
@@ -204,7 +204,7 @@ func (doc Document) CheckCertificates(
 		for i, item := range doc.CABundle {
 			intermediate, err := x509.ParseCertificate(item)
 			if nil != err {
-				return nil, nil, fmt.Errorf(
+				return nil, fmt.Errorf(
 					"parsing intermediate '%v' cert: %w",
 					i,
 					err,
@@ -217,12 +217,12 @@ func (doc Document) CheckCertificates(
 	}
 
 	if verificationTime(doc).IsZero() {
-		return nil, nil, fmt.Errorf("verification time is 0")
+		return nil, fmt.Errorf("verification time is 0")
 	}
 
 	roots, err := certProvider.Roots()
 	if nil != err {
-		return nil, nil, fmt.Errorf("getting root certificates: %w", err)
+		return nil, fmt.Errorf("getting root certificates: %w", err)
 	}
 
 	_, err = cert.Verify(
@@ -236,8 +236,8 @@ func (doc Document) CheckCertificates(
 		},
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("verifying certificate: %w", err)
+		return nil, fmt.Errorf("verifying certificate: %w", err)
 	}
 
-	return cert, certificates, nil
+	return certificates, nil
 }

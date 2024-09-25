@@ -178,7 +178,7 @@ func Verify(
 		return nil, fmt.Errorf("unmarshaling document: %w", err)
 	}
 
-	cert, certificates, err := doc.Verify(certProvider, verificationTime)
+	certificates, err := doc.Verify(certProvider, verificationTime)
 	if err != nil {
 		return nil, fmt.Errorf("verifying document: %w", err)
 
@@ -206,7 +206,7 @@ func Verify(
 	}
 
 	signatureOk := checkECDSASignature(
-		cert.PublicKey.(*ecdsa.PublicKey),
+		certificates[0].PublicKey.(*ecdsa.PublicKey),
 		sigStruct,
 		cose.Signature,
 	)

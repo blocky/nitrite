@@ -145,7 +145,7 @@ func TestDocument_Verify(t *testing.T) {
 	for _, tt := range happyPathTests {
 		t.Run(tt.name, func(t *testing.T) {
 			// when
-			_, _, err := tt.doc.Verify(
+			_, err := tt.doc.Verify(
 				tt.certProvider,
 				internal.WithAttestationTime(),
 			)
@@ -383,7 +383,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 			t.Log(key)
 
 			// when
-			_, _, err := documents[key].doc.CheckCertificates(
+			_, err := documents[key].doc.CheckCertificates(
 				documents[key].certProvider,
 				internal.WithAttestationTime(),
 			)
@@ -402,7 +402,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 			certProvider.EXPECT().Roots().Return(nil, assert.AnError)
 
 			// when
-			_, _, err := documents[key].doc.CheckCertificates(
+			_, err := documents[key].doc.CheckCertificates(
 				certProvider,
 				internal.WithAttestationTime(),
 			)
@@ -422,7 +422,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 			certProvider.EXPECT().Roots().Return(nil, nil)
 
 			// when
-			_, _, err := documents[key].doc.CheckCertificates(
+			_, err := documents[key].doc.CheckCertificates(
 				certProvider,
 				internal.WithAttestationTime(),
 			)
@@ -441,7 +441,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 			certProvider.EXPECT().Roots().Return(x509.NewCertPool(), nil)
 
 			// when
-			_, _, err := documents[key].doc.CheckCertificates(
+			_, err := documents[key].doc.CheckCertificates(
 				certProvider,
 				internal.WithAttestationTime(),
 			)
@@ -476,7 +476,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 				t.Log(key)
 
 				// when
-				_, _, err := documents[key].doc.CheckCertificates(
+				_, err := documents[key].doc.CheckCertificates(
 					documents[key].certProvider,
 					tt.timeOpt,
 				)
@@ -492,7 +492,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 		doc := internal.Document{}
 
 		// when
-		_, _, err := doc.CheckCertificates(nil, nil)
+		_, err := doc.CheckCertificates(nil, nil)
 
 		// then
 		assert.ErrorContains(t, err, "parsing cert")
@@ -504,7 +504,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 		doc.CABundle = nil
 
 		// when
-		_, _, err := doc.CheckCertificates(nil, nil)
+		_, err := doc.CheckCertificates(nil, nil)
 
 		// then
 		assert.ErrorContains(t, err, "missing cabundle")
@@ -516,7 +516,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 		doc.CABundle = [][]byte{nil}
 
 		// when
-		_, _, err := doc.CheckCertificates(nil, nil)
+		_, err := doc.CheckCertificates(nil, nil)
 
 		// then
 		assert.ErrorContains(t, err, "cabundle item")
@@ -528,7 +528,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 		doc.CABundle = [][]byte{make([]byte, 0)}
 
 		// when
-		_, _, err := doc.CheckCertificates(nil, nil)
+		_, err := doc.CheckCertificates(nil, nil)
 
 		// then
 		assert.ErrorContains(t, err, "cabundle item")
@@ -540,7 +540,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 		doc.CABundle = [][]byte{make([]byte, 1025)}
 
 		// when
-		_, _, err := doc.CheckCertificates(nil, nil)
+		_, err := doc.CheckCertificates(nil, nil)
 
 		// then
 		assert.ErrorContains(t, err, "cabundle item")
@@ -552,7 +552,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 		doc.CABundle = [][]byte{make([]byte, 1)}
 
 		// when
-		_, _, err := doc.CheckCertificates(nil, nil)
+		_, err := doc.CheckCertificates(nil, nil)
 
 		// then
 		assert.ErrorContains(t, err, "parsing intermediate")
