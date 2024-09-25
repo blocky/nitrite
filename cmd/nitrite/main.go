@@ -20,12 +20,7 @@ var (
 func main() {
 	flag.Parse()
 
-	if "" == *fAttestation {
-		flag.PrintDefaults()
-		os.Exit(1)
-	}
-
-	if *fAttestation == "-" {
+	if *fAttestation == "" {
 		bytes, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			err = fmt.Errorf(

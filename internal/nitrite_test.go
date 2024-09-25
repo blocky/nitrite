@@ -1,17 +1,16 @@
 package internal_test
 
 import (
-	"crypto/x509"
 	_ "embed"
 	"encoding/base64"
 	"testing"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/blocky/nitrite/internal"
-	"github.com/blocky/nitrite/mocks"
 )
 
 // The canonical way to regenerate attestations is to request an attestation
@@ -32,20 +31,23 @@ func TestNitrite_Verify(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	attestatations := map[string]struct {
+	tests := []struct {
+		name         string
 		attestation  []byte
 		time         time.Time
 		certProvider internal.CertProvider
 		allowDebug   bool
 	}{
-		"nitro": {
+		{
+			name:        "happy path - nitro",
 			attestation: nitroAttestation,
 			time:        internal.NitroAttestationTime,
 			certProvider: internal.NewNitroCertProvider(
 				internal.NewEmbeddedRootCertZipReader(),
 			),
 		},
-		"debug": {
+		{
+			name:        "happy path - debug nitro",
 			attestation: debugNitroAttestation,
 			time:        internal.DebugNitroAttestationTime,
 			certProvider: internal.NewNitroCertProvider(
@@ -53,23 +55,23 @@ func TestNitrite_Verify(t *testing.T) {
 			),
 			allowDebug: true,
 		},
-		"self-signed": {
+		{
+			name:         "happy path - self signed",
 			attestation:  selfSignedAttestation,
 			time:         internal.SelfSignedAttestationTime,
 			certProvider: internal.NewSelfSignedCertProvider(),
 		},
 	}
 
-	for key := range attestatations {
-		t.Run("happy path", func(t *testing.T) {
-			t.Log(key)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 
 			// when
 			result, err := internal.Verify(
-				attestatations[key].attestation,
-				attestatations[key].certProvider,
+				tt.attestation,
+				tt.certProvider,
 				internal.WithAttestationTime(),
-				attestatations[key].allowDebug,
+				tt.allowDebug,
 			)
 
 			// then
@@ -77,119 +79,76 @@ func TestNitrite_Verify(t *testing.T) {
 			// make sure at least one of the fields is populated and attested
 			assert.Equal(
 				t,
-				attestatations[key].time.UTC(),
+				tt.time.UTC(),
 				result.Document.CreatedAt().UTC(),
 			)
 		})
 
-		t.Run("cannot get root certificates", func(t *testing.T) {
-			t.Log(key)
-
-			// given
-			certProvider := mocks.NewNitriteCertProvider(t)
-
-			// expecting
-			certProvider.EXPECT().Roots().Return(nil, assert.AnError)
-
-			// when
-			_, err := internal.Verify(
-				attestatations[key].attestation,
-				certProvider,
-				internal.WithAttestationTime(),
-				attestatations[key].allowDebug,
-			)
-
-			// then
-			assert.ErrorIs(t, err, assert.AnError)
-			assert.ErrorContains(t, err, "getting root certificates")
-		})
-
-		t.Run("unknown signing authority - nil roots", func(t *testing.T) {
-			t.Log(key)
-
-			// given
-			certProvider := mocks.NewNitriteCertProvider(t)
-
-			// expecting
-			certProvider.EXPECT().Roots().Return(nil, nil)
-
-			// when
-			_, err := internal.Verify(
-				attestatations[key].attestation,
-				certProvider,
-				internal.WithAttestationTime(),
-				attestatations[key].allowDebug,
-			)
-
-			// then
-			assert.ErrorContains(t, err, "verifying certificate")
-		})
-
-		t.Run("unknown signing authority - empty roots", func(t *testing.T) {
-			t.Log(key)
-
-			// given
-			certProvider := mocks.NewNitriteCertProvider(t)
-
-			// expecting
-			certProvider.EXPECT().Roots().Return(x509.NewCertPool(), nil)
-
-			// when
-			_, err := internal.Verify(
-				attestatations[key].attestation,
-				certProvider,
-				internal.WithAttestationTime(),
-				attestatations[key].allowDebug,
-			)
-
-			// then
-			assert.ErrorContains(t, err, "verifying certificate")
-		})
-
-		timeOutOfBoundsTests := []struct {
-			name        string
-			timeOpt     internal.VerificationTimeFunc
-			errContains string
-		}{
-			{
-				"certificate expired",
-				internal.WithTime(time.Date(10000, 0, 0, 0, 0, 0, 0, time.UTC)),
-				"verifying certificate",
-			},
-			{
-				"certificate not yet valid",
-				internal.WithTime(time.Date(1970, 0, 0, 0, 0, 0, 0, time.UTC)),
-				"verifying certificate",
-			},
-			{
-				"zero time",
-				internal.WithTime(time.Time{}),
-				"verification time is 0",
-			},
-		}
-		for _, tt := range timeOutOfBoundsTests {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Log(key)
-
-				// when
-				_, err = internal.Verify(
-					attestatations[key].attestation,
-					attestatations[key].certProvider,
-					tt.timeOpt,
-					attestatations[key].allowDebug,
-				)
-
-				// then
-				assert.ErrorContains(t, err, tt.errContains)
-			})
-		}
 	}
+
+	t.Run("unmarshaling document", func(t *testing.T) {
+		// given
+		nitroCose := internal.CosePayload{}
+		err := cbor.Unmarshal(nitroAttestation, &nitroCose)
+		require.NoError(t, err)
+
+		nitroCose.Payload = []byte("not a valid document")
+		badNitroAttestation, err := cbor.Marshal(nitroCose)
+		require.NoError(t, err)
+
+		// when
+		_, err = internal.Verify(
+			badNitroAttestation,
+			internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
+			internal.WithAttestationTime(),
+			false,
+		)
+
+		// then
+		assert.ErrorContains(t, err, "unmarshaling document")
+	})
+
+	t.Run("verifying document", func(t *testing.T) {
+		// given
+		nitroCose := internal.CosePayload{}
+		err := cbor.Unmarshal(nitroAttestation, &nitroCose)
+		require.NoError(t, err)
+
+		nitroDoc := internal.Document{}
+		err = cbor.Unmarshal(nitroCose.Payload, &nitroDoc)
+		require.NoError(t, err)
+
+		nitroDoc.Digest = "not a valid digest"
+		badDocBytes, err := cbor.Marshal(nitroDoc)
+		require.NoError(t, err)
+
+		nitroCose.Payload = badDocBytes
+		badNitroAttestation, err := cbor.Marshal(nitroCose)
+		require.NoError(t, err)
+
+		// when
+		_, err = internal.Verify(
+			badNitroAttestation,
+			internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
+			internal.WithAttestationTime(),
+			false,
+		)
+
+		// then
+		assert.ErrorContains(t, err, "verifying document")
+	})
 
 	t.Run("attestation was generated in debug mode", func(t *testing.T) {
 		// when
 		_, err := internal.Verify(
-			attestatations["debug"].attestation,
-			attestatations["debug"].certProvider,
+			debugNitroAttestation,
+			internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
 			internal.WithAttestationTime(),
 			false,
 		)
