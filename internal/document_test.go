@@ -29,11 +29,10 @@ func initDocuments(t *testing.T) (
 		attestation, err := base64.StdEncoding.DecodeString(att64String)
 		require.NoError(t, err)
 
-		cosePayload := internal.CosePayload{}
-		err = cbor.Unmarshal(attestation, &cosePayload)
+		coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
 		require.NoError(t, err)
 
-		err = cbor.Unmarshal(cosePayload.Payload, &docs[i])
+		err = cbor.Unmarshal(coseSign1.Payload, &docs[i])
 		require.NoError(t, err)
 	}
 	return docs[0], docs[1], docs[2]

@@ -88,12 +88,12 @@ func TestNitrite_Verify(t *testing.T) {
 
 	t.Run("unmarshaling document", func(t *testing.T) {
 		// given
-		nitroCose := internal.CosePayload{}
-		err := cbor.Unmarshal(nitroAttestation, &nitroCose)
+		nitroCoseSign1, err := internal.MakeCoseSign1FromBytes(nitroAttestation)
+		require.NoError(t, err)
 		require.NoError(t, err)
 
-		nitroCose.Payload = []byte("not a valid document")
-		badNitroAttestation, err := cbor.Marshal(nitroCose)
+		nitroCoseSign1.Payload = []byte("not a valid document")
+		badNitroAttestation, err := cbor.Marshal(nitroCoseSign1)
 		require.NoError(t, err)
 
 		// when
@@ -112,20 +112,19 @@ func TestNitrite_Verify(t *testing.T) {
 
 	t.Run("verifying document", func(t *testing.T) {
 		// given
-		nitroCose := internal.CosePayload{}
-		err := cbor.Unmarshal(nitroAttestation, &nitroCose)
+		nitroCoseSign1, err := internal.MakeCoseSign1FromBytes(nitroAttestation)
 		require.NoError(t, err)
 
 		nitroDoc := internal.Document{}
-		err = cbor.Unmarshal(nitroCose.Payload, &nitroDoc)
+		err = cbor.Unmarshal(nitroCoseSign1.Payload, &nitroDoc)
 		require.NoError(t, err)
 
 		nitroDoc.Digest = "not a valid digest"
 		badDocBytes, err := cbor.Marshal(nitroDoc)
 		require.NoError(t, err)
 
-		nitroCose.Payload = badDocBytes
-		badNitroAttestation, err := cbor.Marshal(nitroCose)
+		nitroCoseSign1.Payload = badDocBytes
+		badNitroAttestation, err := cbor.Marshal(nitroCoseSign1)
 		require.NoError(t, err)
 
 		// when
@@ -139,7 +138,7 @@ func TestNitrite_Verify(t *testing.T) {
 		)
 
 		// then
-		assert.ErrorContains(t, err, "verifying document")
+		assert.ErrorContains(t, err, "making document from coseSign1 payload")
 	})
 
 	t.Run("attestation was generated in debug mode", func(t *testing.T) {

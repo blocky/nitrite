@@ -3,56 +3,10 @@ package internal
 
 import (
 	"crypto/ecdsa"
-	"crypto/sha256"
-	"crypto/sha512"
 	_ "embed"
-	"errors"
 	"fmt"
-	"math/big"
 	"time"
-
-	"github.com/fxamacker/cbor/v2"
 )
-
-type CoseHeader struct {
-	Alg interface{} `cbor:"1,keyasint,omitempty" json:"alg,omitempty"`
-}
-
-func (h *CoseHeader) AlgorithmString() (string, bool) {
-	switch h.Alg.(type) {
-	case string:
-		return h.Alg.(string), true
-	}
-
-	return "", false
-}
-
-func (h *CoseHeader) AlgorithmInt() (int64, bool) {
-	switch h.Alg.(type) {
-	case int64:
-		return h.Alg.(int64), true
-	}
-
-	return 0, false
-}
-
-type CosePayload struct {
-	_ struct{} `cbor:",toarray"`
-
-	Protected   []byte
-	Unprotected cbor.RawMessage
-	Payload     []byte
-	Signature   []byte
-}
-
-type coseSignature struct {
-	_ struct{} `cbor:",toarray"`
-
-	Context     string
-	Protected   []byte
-	ExternalAAD []byte
-	Payload     []byte
-}
 
 // Size of these fields (in bytes) comes from AWS Nitro documentation at
 // https://docs.aws.amazon.com/enclaves/latest/user/enclaves-user.pdf
@@ -66,21 +20,6 @@ const (
 	MaxUserDataLen  = 1024
 	MaxNonceLen     = MaxUserDataLen
 	MaxPublicKeyLen = MaxUserDataLen
-)
-
-// Errors that are encountered when manipulating the COSESign1 structure.
-var (
-	ErrBadCOSESign1Structure          error = errors.New("Data is not a COSESign1 array")
-	ErrCOSESign1EmptyProtectedSection error = errors.New("COSESign1 protected section is nil or empty")
-	ErrCOSESign1EmptyPayloadSection   error = errors.New("COSESign1 payload section is nil or empty")
-	ErrCOSESign1EmptySignatureSection error = errors.New("COSESign1 signature section is nil or empty")
-	ErrCOSESign1BadAlgorithm          error = errors.New("COSESign1 algorithm not ECDSA384")
-)
-
-// Errors encountered when parsing the CoseBytes attestation document.
-var (
-	ErrBadSignature             error = errors.New("Payload's signature does not match signature from certificate")
-	ErrMarshallingCoseSignature error = errors.New("Could not marshal COSE signature")
 )
 
 type VerificationTimeFunc func(Document) time.Time
@@ -120,71 +59,14 @@ func Verify(
 	*Result,
 	error,
 ) {
-	cose := CosePayload{}
-
-	err := cbor.Unmarshal(attestation, &cose)
-	if nil != err {
-		return nil, ErrBadCOSESign1Structure
-	}
-
-	if nil == cose.Protected || 0 == len(cose.Protected) {
-		return nil, ErrCOSESign1EmptyProtectedSection
-	}
-
-	if nil == cose.Payload || 0 == len(cose.Payload) {
-		return nil, ErrCOSESign1EmptyPayloadSection
-	}
-
-	if nil == cose.Signature || 0 == len(cose.Signature) {
-		return nil, ErrCOSESign1EmptySignatureSection
-	}
-
-	header := CoseHeader{}
-	err = cbor.Unmarshal(cose.Protected, &header)
-	if nil != err {
-		return nil, ErrBadCOSESign1Structure
-	}
-
-	intAlg, ok := header.AlgorithmInt()
-
-	// https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
-	if ok {
-		switch intAlg {
-		case -35:
-			// do nothing -- OK
-
-		default:
-			return nil, ErrCOSESign1BadAlgorithm
-		}
-	} else {
-		strAlg, ok := header.AlgorithmString()
-
-		if ok {
-			switch strAlg {
-			case "ES384":
-				// do nothing -- OK
-
-			default:
-				return nil, ErrCOSESign1BadAlgorithm
-			}
-		} else {
-			return nil, ErrCOSESign1BadAlgorithm
-		}
-	}
-
-	doc := Document{}
-	err = cbor.Unmarshal(cose.Payload, &doc)
-	if nil != err {
-		return nil, fmt.Errorf("unmarshaling document: %w", err)
-	}
-
-	certificates, err := doc.Verify(certProvider, verificationTime)
+	coseSign1, err := MakeCoseSign1FromBytes(attestation)
 	if err != nil {
-		return nil, fmt.Errorf("verifying document: %w", err)
-
+		return nil, fmt.Errorf("making cose sign1 from attestation bytes: %w", err)
 	}
-	if len(certificates) < 1 {
-		return nil, fmt.Errorf("certificates chain is empty")
+
+	doc, err := MakeDocumentFromBytes(coseSign1.Payload)
+	if nil != err {
+		return nil, fmt.Errorf("making document from coseSign1 payload: %w", err)
 	}
 
 	docDebug, err := doc.Debug()
@@ -196,83 +78,28 @@ func Verify(
 		return nil, fmt.Errorf("attestation was generated in debug mode")
 	}
 
-	coseSig := coseSignature{
-		Context:     "Signature1",
-		Protected:   cose.Protected,
-		ExternalAAD: []byte{},
-		Payload:     cose.Payload,
-	}
-
-	sigStruct, err := cbor.Marshal(&coseSig)
+	certificates, err := doc.CheckCertificates(certProvider, verificationTime)
 	if err != nil {
-		return nil, ErrMarshallingCoseSignature
+		return nil, fmt.Errorf("verifying document: %w", err)
+
+	}
+	if len(certificates) < 1 {
+		return nil, fmt.Errorf("certificates chain is empty")
 	}
 
-	signatureOk := checkECDSASignature(
-		certificates[0].PublicKey.(*ecdsa.PublicKey),
-		sigStruct,
-		cose.Signature,
-	)
-
-	if !signatureOk {
-		err = ErrBadSignature
+	sigStruct, err := coseSign1.CheckSignature(certificates[0].PublicKey.(*ecdsa.PublicKey))
+	if err != nil {
+		return nil, fmt.Errorf("checking cose sign1 signature: %w", err)
 	}
 
 	return &Result{
 		Document:     &doc,
 		Certificates: certificates,
-		Protected:    cose.Protected,
-		Unprotected:  cose.Unprotected,
-		Payload:      cose.Payload,
-		Signature:    cose.Signature,
-		SignatureOK:  signatureOk,
+		Protected:    coseSign1.Protected,
+		Unprotected:  coseSign1.Unprotected,
+		Payload:      coseSign1.Payload,
+		Signature:    coseSign1.Signature,
+		SignatureOK:  true,
 		COSESign1:    sigStruct,
 	}, err
-}
-
-func checkECDSASignature(
-	publicKey *ecdsa.PublicKey,
-	sigStruct, signature []byte,
-) bool {
-	// https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
-
-	var hashSigStruct []byte = nil
-
-	switch publicKey.Curve.Params().Name {
-	case "P-224":
-		h := sha256.Sum224(sigStruct)
-		hashSigStruct = h[:]
-
-	case "P-256":
-		h := sha256.Sum256(sigStruct)
-		hashSigStruct = h[:]
-
-	case "P-384":
-		h := sha512.Sum384(sigStruct)
-		hashSigStruct = h[:]
-
-	case "P-512":
-		h := sha512.Sum512(sigStruct)
-		hashSigStruct = h[:]
-
-	default:
-		panic(
-			fmt.Sprintf(
-				"unknown ECDSA curve name %v",
-				publicKey.Curve.Params().Name,
-			),
-		)
-	}
-
-	if len(signature) != 2*len(hashSigStruct) {
-		return false
-	}
-
-	r := big.NewInt(0)
-	s := big.NewInt(0)
-
-	r = r.SetBytes(signature[:len(hashSigStruct)])
-	s = s.SetBytes(signature[len(hashSigStruct):])
-
-	return ecdsa.Verify(publicKey, hashSigStruct, r, s)
 }

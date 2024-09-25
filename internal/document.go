@@ -4,6 +4,8 @@ import (
 	"crypto/x509"
 	"fmt"
 	"time"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 // Document represents the AWS Nitro Enclave Attestation Document.
@@ -18,6 +20,26 @@ type Document struct {
 	PublicKey []byte `cbor:"public_key" json:"public_key,omitempty"`
 	UserData  []byte `cbor:"user_data" json:"user_data,omitempty"`
 	Nonce     []byte `cbor:"nonce" json:"nonce,omitempty"`
+}
+
+// TODO: Unit tests
+func MakeDocumentFromBytes(bytes []byte) (Document, error) {
+	doc := Document{}
+	err := cbor.Unmarshal(bytes, &doc)
+	if nil != err {
+		return Document{}, fmt.Errorf("unmarshaling document: %w", err)
+	}
+
+	err = doc.CheckMandatoryFields()
+	if err != nil {
+		return Document{}, err
+	}
+
+	err = doc.CheckOptionalFields()
+	if err != nil {
+		return Document{}, err
+	}
+	return doc, nil
 }
 
 func (doc Document) CreatedAt() time.Time {
@@ -56,6 +78,7 @@ func (doc Document) Debug() (bool, error) {
 	return true, nil
 }
 
+// TODO: Remove
 func (doc Document) Verify(
 	certProvider CertProvider,
 	verificationTime VerificationTimeFunc,
