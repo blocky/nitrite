@@ -542,7 +542,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 		_, err := doc.CheckCertificates(nil, nil)
 
 		// then
-		assert.ErrorContains(t, err, "cabundle item")
+		assert.ErrorContains(t, err, "cabundle item '0' expected len is")
 	})
 
 	t.Run("cabundle item too short", func(t *testing.T) {
@@ -554,7 +554,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 		_, err := doc.CheckCertificates(nil, nil)
 
 		// then
-		assert.ErrorContains(t, err, "cabundle item")
+		assert.ErrorContains(t, err, "cabundle item '0' expected len is")
 	})
 
 	t.Run("cabundle item too long", func(t *testing.T) {
@@ -566,7 +566,7 @@ func TestDocument_CheckCertificates(t *testing.T) {
 		_, err := doc.CheckCertificates(nil, nil)
 
 		// then
-		assert.ErrorContains(t, err, "cabundle item")
+		assert.ErrorContains(t, err, "cabundle item '0' expected len is")
 	})
 
 	t.Run("parsing intermediate", func(t *testing.T) {
