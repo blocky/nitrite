@@ -342,7 +342,7 @@ func TestDocument_CheckOptionalFields(t *testing.T) {
 	t.Run("public key too long", func(t *testing.T) {
 		// given
 		doc := nitroDoc
-		doc.PublicKey = make([]byte, 1025)
+		doc.PublicKey = make([]byte, internal.MaxPublicKeyLen+1)
 
 		// when
 		err := doc.CheckOptionalFields()
