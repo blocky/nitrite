@@ -61,12 +61,12 @@ func Verify(
 ) {
 	coseSign1, err := MakeCoseSign1FromBytes(attestation)
 	if err != nil {
-		return nil, fmt.Errorf("making cose sign1 from attestation bytes: %w", err)
+		return nil, fmt.Errorf("making CoseSign1 from attestation bytes: %w", err)
 	}
 
 	doc, err := MakeDocumentFromBytes(coseSign1.Payload)
 	if nil != err {
-		return nil, fmt.Errorf("making document from coseSign1 payload: %w", err)
+		return nil, fmt.Errorf("making document from payload: %w", err)
 	}
 
 	docDebug, err := doc.Debug()
@@ -80,7 +80,7 @@ func Verify(
 
 	certificates, err := doc.CheckCertificates(certProvider, verificationTime)
 	if err != nil {
-		return nil, fmt.Errorf("verifying document: %w", err)
+		return nil, fmt.Errorf("checking document certificates: %w", err)
 
 	}
 	if len(certificates) < 1 {
@@ -89,7 +89,7 @@ func Verify(
 
 	sigStruct, err := coseSign1.CheckSignature(certificates[0].PublicKey.(*ecdsa.PublicKey))
 	if err != nil {
-		return nil, fmt.Errorf("checking cose sign1 signature: %w", err)
+		return nil, fmt.Errorf("checking CoseSign1 signature: %w", err)
 	}
 
 	return &Result{
