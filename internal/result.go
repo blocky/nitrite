@@ -21,10 +21,6 @@ type Result struct {
 	// Signature section from the COSE Sign1 payload.
 	Signature []byte `json:"signature,omitempty"`
 
-	// SignatureOK designates if the signature was OK (but certificate could be
-	// invalid, not trusted, expired, etc.)
-	SignatureOK bool `json:"signature_ok"`
-
 	// COSESign1 contains the COSE Signature Structure which was used to
 	// calculate the `Signature`.
 	COSESign1 []byte `json:"cose_sign1,omitempty"`

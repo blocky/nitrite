@@ -36,20 +36,11 @@ func WithTime(t time.Time) VerificationTimeFunc {
 	}
 }
 
-// Verify verifies the attestation payload from `data` with the provided
-// verification options. If the options specify `Roots` as `nil`, the
-// `DefaultCARoot` will be used. If you do not specify `CurrentTime`,
-// `time.Now()` will be used. It is strongly recommended you specifically
-// supply the time.  If the returned error is non-nil, it is either one of the
-// `Err` codes specified in this package, or is an error from the `crypto/x509`
-// package. Revocation checks are NOT performed and you should check for
-// revoked certificates by looking at the `Certificates` field in the `Result`.
-// Result will be non-null if and only if either of these are true: certificate
-// verification has passed, certificate verification has failed (expired, not
-// trusted, etc.), signature is OK or signature is not OK. If either signature
-// is not OK or certificate can't be verified, both Result and error will be
-// set! You can use the SignatureOK field from the result to distinguish
-// errors.
+// The process for verifying Nitro attestations is documented here:
+// https://github.com/aws/aws-nitro-enclaves-nsm-api/blob/4b851f3006c6fa98f23dcffb2cba03b39de9b8af/docs/attestation_process.md
+//
+// Revocation checks are NOT performed and you should check for revoked
+// certificates by looking at the `Certificates` field in the `Result`.
 func Verify(
 	attestation []byte,
 	certProvider CertProvider,
@@ -99,7 +90,6 @@ func Verify(
 		Unprotected:  coseSign1.Unprotected,
 		Payload:      coseSign1.Payload,
 		Signature:    coseSign1.Signature,
-		SignatureOK:  true,
 		COSESign1:    sigStruct,
 	}, err
 }
