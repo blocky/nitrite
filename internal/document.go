@@ -22,7 +22,6 @@ type Document struct {
 	Nonce     []byte `cbor:"nonce" json:"nonce,omitempty"`
 }
 
-// TODO: Unit tests
 func MakeDocumentFromBytes(bytes []byte) (Document, error) {
 	doc := Document{}
 	err := cbor.Unmarshal(bytes, &doc)
@@ -32,12 +31,12 @@ func MakeDocumentFromBytes(bytes []byte) (Document, error) {
 
 	err = doc.CheckMandatoryFields()
 	if err != nil {
-		return Document{}, err
+		return Document{}, fmt.Errorf("checking mandatory fields: %w", err)
 	}
 
 	err = doc.CheckOptionalFields()
 	if err != nil {
-		return Document{}, err
+		return Document{}, fmt.Errorf("checking optional fields: %w", err)
 	}
 	return doc, nil
 }
@@ -76,28 +75,6 @@ func (doc Document) Debug() (bool, error) {
 		}
 	}
 	return true, nil
-}
-
-// TODO: Remove
-func (doc Document) Verify(
-	certProvider CertProvider,
-	verificationTime VerificationTimeFunc,
-) ([]*x509.Certificate, error) {
-	err := doc.CheckMandatoryFields()
-	if err != nil {
-		return nil, err
-	}
-
-	err = doc.CheckOptionalFields()
-	if err != nil {
-		return nil, err
-	}
-
-	certificates, err := doc.CheckCertificates(certProvider, verificationTime)
-	if err != nil {
-		return nil, err
-	}
-	return certificates, nil
 }
 
 func missingFieldError(field string) error {

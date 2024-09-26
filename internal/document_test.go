@@ -38,6 +38,80 @@ func initDocuments(t *testing.T) (
 	return docs[0], docs[1], docs[2]
 }
 
+func TestMakeDocumentFromBytes(t *testing.T) {
+	happyPathTests := []struct {
+		name           string
+		attestationB64 string
+	}{
+		{
+			"happy path - nitro",
+			internal.NitroAttestationB64,
+		},
+		{
+			"happy path - debug",
+			internal.DebugNitroAttestationB64,
+		},
+		{
+			"happy path - self signed",
+			internal.SelfSignedAttestationB64,
+		},
+	}
+
+	for _, tt := range happyPathTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// given
+			attestation, err := base64.StdEncoding.DecodeString(tt.attestationB64)
+			require.NoError(t, err)
+
+			coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
+			require.NoError(t, err)
+
+			// when
+			doc, err := internal.MakeDocumentFromBytes(coseSign1.Payload)
+
+			// then
+			require.NoError(t, err)
+			require.Equal(t, doc.Digest, "SHA384")
+		})
+	}
+
+	t.Run("checking mandatory fields", func(t *testing.T) {
+		// given
+		doc := internal.Document{}
+		docBytes, err := cbor.Marshal(doc)
+		require.NoError(t, err)
+
+		// when
+		_, err = internal.MakeDocumentFromBytes(docBytes)
+
+		// then
+		assert.ErrorContains(t, err, "checking mandatory fields")
+	})
+
+	t.Run("checking optional fields", func(t *testing.T) {
+		// given
+		attestation, err := base64.StdEncoding.DecodeString(internal.NitroAttestationB64)
+		require.NoError(t, err)
+
+		coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
+		require.NoError(t, err)
+
+		doc := internal.Document{}
+		err = cbor.Unmarshal(coseSign1.Payload, &doc)
+		require.NoError(t, err)
+
+		doc.PublicKey = make([]byte, internal.MaxPublicKeyLen+1)
+		docBytes, err := cbor.Marshal(doc)
+		require.NoError(t, err)
+
+		// when
+		_, err = internal.MakeDocumentFromBytes(docBytes)
+
+		// then
+		assert.ErrorContains(t, err, "checking optional fields")
+	})
+}
+
 func TestDocument_CreatedAt(t *testing.T) {
 	happyPathTests := []struct {
 		name      string
@@ -104,47 +178,6 @@ func TestDocument_Debug(t *testing.T) {
 	})
 }
 
-func TestDocument_Verify(t *testing.T) {
-	nitroDoc, debugNitroDoc, selfSignedDoc := initDocuments(t)
-	happyPathTests := []struct {
-		name         string
-		doc          internal.Document
-		certProvider internal.CertProvider
-	}{
-		{
-			name: "happy path - nitro",
-			doc:  nitroDoc,
-			certProvider: internal.NewNitroCertProvider(
-				internal.NewEmbeddedRootCertZipReader(),
-			),
-		},
-		{
-			name: "happy path - debug nitro",
-			doc:  debugNitroDoc,
-			certProvider: internal.NewNitroCertProvider(
-				internal.NewEmbeddedRootCertZipReader(),
-			),
-		},
-		{
-			name:         "happy path - self signed",
-			doc:          selfSignedDoc,
-			certProvider: internal.NewSelfSignedCertProvider(),
-		},
-	}
-
-	for _, tt := range happyPathTests {
-		t.Run(tt.name, func(t *testing.T) {
-			// when
-			_, err := tt.doc.Verify(
-				tt.certProvider,
-				internal.WithAttestationTime(),
-			)
-
-			// then
-			require.NoError(t, err)
-		})
-	}
-}
 func TestDocument_CheckMandatoryFields(t *testing.T) {
 	nitroDoc, debugNitroDoc, selfSignedDoc := initDocuments(t)
 	happyPathTests := []struct {
