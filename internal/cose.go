@@ -16,6 +16,7 @@ const (
 	ES384
 )
 
+// https://datatracker.ietf.org/doc/html/rfc8152#section-4.2
 type CoseSign1 struct {
 	_ struct{} `cbor:",toarray"`
 
@@ -58,7 +59,8 @@ func (c CoseSign1) CheckSignature(
 		return nil, fmt.Errorf("extracting signing algorithm: %w", err)
 	}
 
-	coseSigStruct := struct {
+	// https://datatracker.ietf.org/doc/html/rfc8152#section-4.4
+	sigStruct := struct {
 		_ struct{} `cbor:",toarray"`
 
 		Context     string
@@ -72,12 +74,12 @@ func (c CoseSign1) CheckSignature(
 		Payload:     c.Payload,
 	}
 
-	sigStructBytes, err := cbor.Marshal(&coseSigStruct)
+	sigStructBytes, err := cbor.Marshal(&sigStruct)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling cose signature struct: %w", err)
 	}
 
-	var hashSigStruct []byte
+	var sigStructHash []byte
 	switch signingAlg {
 	case ES384:
 		if publicKey.Curve.Params().Name != "P-384" {
@@ -89,25 +91,25 @@ func (c CoseSign1) CheckSignature(
 		}
 
 		h := sha512.Sum384(sigStructBytes)
-		hashSigStruct = h[:]
+		sigStructHash = h[:]
 	default:
 		return nil, fmt.Errorf("unsupported signing alg '%v'", signingAlg)
 	}
 
-	if len(c.Signature) != 2*len(hashSigStruct) {
+	if len(c.Signature) != 2*len(sigStructHash) {
 		return nil, fmt.Errorf(
 			"expected signature len '%v' got '%v'",
-			2*len(hashSigStruct),
+			2*len(sigStructHash),
 			len(c.Signature),
 		)
 	}
 
 	r := big.NewInt(0)
 	s := big.NewInt(0)
-	r = r.SetBytes(c.Signature[:len(hashSigStruct)])
-	s = s.SetBytes(c.Signature[len(hashSigStruct):])
+	r = r.SetBytes(c.Signature[:len(sigStructHash)])
+	s = s.SetBytes(c.Signature[len(sigStructHash):])
 
-	signatureOK := ecdsa.Verify(publicKey, hashSigStruct, r, s)
+	signatureOK := ecdsa.Verify(publicKey, sigStructHash, r, s)
 	if !signatureOK {
 		return nil, fmt.Errorf("failed to verify ecdsa signature")
 	}
@@ -122,7 +124,6 @@ func (c CoseSign1) GetSigningAlgorithm() (SigningAlgorithm, error) {
 			fmt.Errorf("unmarshaling cose protected header: %w", err)
 	}
 
-	// https://datatracker.ietf.org/doc/html/rfc8152#section-8.1
 	intAlg, ok := header.AlgorithmInt()
 	if ok {
 		switch intAlg {
