@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"encoding/base64"
 	"testing"
 
 	"github.com/blocky/nitrite/internal"
@@ -12,20 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func initAttestations(t *testing.T) (
-	[]byte,
-	[]byte,
-	[]byte,
-) {
-	nitroAtt, err := base64.StdEncoding.DecodeString(internal.NitroAttestationB64)
-	require.NoError(t, err)
-	debugAtt, err := base64.StdEncoding.DecodeString(internal.DebugNitroAttestationB64)
-	require.NoError(t, err)
-	selfAtt, err := base64.StdEncoding.DecodeString(internal.SelfSignedAttestationB64)
-	require.NoError(t, err)
-	return nitroAtt, debugAtt, selfAtt
-}
 
 func TestCoseSign1_Verify(t *testing.T) {
 	nitroAtt, debugAtt, selfAtt := initAttestations(t)

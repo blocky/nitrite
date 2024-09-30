@@ -16,22 +16,22 @@ import (
 // The canonical way to regenerate attestations is to request an attestation
 // using hf/nsm/Send() and write the resulting bytes to a file as a base64
 // string.
+func initAttestations(t *testing.T) (
+	[]byte,
+	[]byte,
+	[]byte,
+) {
+	nitroAtt, err := base64.StdEncoding.DecodeString(internal.NitroAttestationB64)
+	require.NoError(t, err)
+	debugAtt, err := base64.StdEncoding.DecodeString(internal.DebugNitroAttestationB64)
+	require.NoError(t, err)
+	selfAtt, err := base64.StdEncoding.DecodeString(internal.SelfSignedAttestationB64)
+	require.NoError(t, err)
+	return nitroAtt, debugAtt, selfAtt
+}
 
 func TestNitrite_Verify(t *testing.T) {
-	// TODO: Place into initAttestations to share with other tests?
-	nitroAttestation, err := base64.StdEncoding.DecodeString(
-		internal.NitroAttestationB64,
-	)
-	require.NoError(t, err)
-	debugNitroAttestation, err := base64.StdEncoding.DecodeString(
-		internal.DebugNitroAttestationB64,
-	)
-	require.NoError(t, err)
-	selfSignedAttestation, err := base64.StdEncoding.DecodeString(
-		internal.SelfSignedAttestationB64,
-	)
-	require.NoError(t, err)
-
+	nitroAtt, debugAtt, selfAtt := initAttestations(t)
 	tests := []struct {
 		name         string
 		attestation  []byte
@@ -41,7 +41,7 @@ func TestNitrite_Verify(t *testing.T) {
 	}{
 		{
 			name:        "happy path - nitro",
-			attestation: nitroAttestation,
+			attestation: nitroAtt,
 			time:        internal.NitroAttestationTime,
 			certProvider: internal.NewNitroCertProvider(
 				internal.NewEmbeddedRootCertZipReader(),
@@ -49,7 +49,7 @@ func TestNitrite_Verify(t *testing.T) {
 		},
 		{
 			name:        "happy path - debug nitro",
-			attestation: debugNitroAttestation,
+			attestation: debugAtt,
 			time:        internal.DebugNitroAttestationTime,
 			certProvider: internal.NewNitroCertProvider(
 				internal.NewEmbeddedRootCertZipReader(),
@@ -58,7 +58,7 @@ func TestNitrite_Verify(t *testing.T) {
 		},
 		{
 			name:         "happy path - self signed",
-			attestation:  selfSignedAttestation,
+			attestation:  selfAtt,
 			time:         internal.SelfSignedAttestationTime,
 			certProvider: internal.NewSelfSignedCertProvider(),
 		},
@@ -91,7 +91,7 @@ func TestNitrite_Verify(t *testing.T) {
 		badAttestation := []byte("invalid CoseSign1 structure")
 
 		// when
-		_, err = internal.Verify(
+		_, err := internal.Verify(
 			badAttestation,
 			internal.NewNitroCertProvider(
 				internal.NewEmbeddedRootCertZipReader(),
@@ -107,7 +107,7 @@ func TestNitrite_Verify(t *testing.T) {
 	t.Run("invalid document", func(t *testing.T) {
 		// given
 		nitroCoseSign1 := internal.CoseSign1{}
-		err := nitroCoseSign1.UnmarshalBinary(nitroAttestation)
+		err := nitroCoseSign1.UnmarshalBinary(nitroAtt)
 		require.NoError(t, err)
 		require.NoError(t, err)
 
@@ -132,7 +132,7 @@ func TestNitrite_Verify(t *testing.T) {
 	t.Run("debug mode not allowed", func(t *testing.T) {
 		// when
 		_, err := internal.Verify(
-			debugNitroAttestation,
+			debugAtt,
 			internal.NewNitroCertProvider(
 				internal.NewEmbeddedRootCertZipReader(),
 			),
@@ -146,8 +146,8 @@ func TestNitrite_Verify(t *testing.T) {
 
 	t.Run("verifying document", func(t *testing.T) {
 		// when
-		_, err = internal.Verify(
-			nitroAttestation,
+		_, err := internal.Verify(
+			nitroAtt,
 			internal.NewSelfSignedCertProvider(),
 			internal.WithAttestationTime(),
 			false,
@@ -160,7 +160,7 @@ func TestNitrite_Verify(t *testing.T) {
 	t.Run("verifying CoseSign1", func(t *testing.T) {
 		// given
 		nitroCoseSign1 := internal.CoseSign1{}
-		err := nitroCoseSign1.UnmarshalBinary(nitroAttestation)
+		err := nitroCoseSign1.UnmarshalBinary(nitroAtt)
 		require.NoError(t, err)
 
 		nitroCoseSign1.Signature = []byte("not a valid signature")
