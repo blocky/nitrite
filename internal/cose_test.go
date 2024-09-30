@@ -6,10 +6,11 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"github.com/blocky/nitrite/internal"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/blocky/nitrite/internal"
 )
 
 func TestCoseSign1_Verify(t *testing.T) {
