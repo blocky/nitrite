@@ -18,7 +18,7 @@ TESTDATA=internal/testdata
 NITRITE_CMD=cmd/nitrite/main.go
 .PHONY: test-main
 test-main: tidy
-	@go test -v ./test/integration/... -count=1 -run Nitrite
+	@go test -v ./cmd/nitrite/... -count=1
 
 
 .PHONY: test

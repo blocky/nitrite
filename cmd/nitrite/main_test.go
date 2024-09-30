@@ -1,4 +1,4 @@
-package integration
+package main_test
 
 import (
 	"encoding/json"
@@ -56,14 +56,10 @@ func runNitriteWithEnv(
 	return output, nil
 }
 
-const (
-	cmdPath = "../../cmd/nitrite/main.go"
-)
-
-func TestNitrite(t *testing.T) {
+func TestExec(t *testing.T) {
 	t.Run("nitro attestation", func(t *testing.T) {
 		// given
-		cmd := "go run " + cmdPath
+		cmd := "go run main.go"
 		cmd += " -attestation " + internal.NitroAttestationB64
 
 		// when
@@ -76,7 +72,7 @@ func TestNitrite(t *testing.T) {
 
 	t.Run("debug nitro attestation", func(t *testing.T) {
 		// given
-		cmd := "go run " + cmdPath
+		cmd := "go run main.go"
 		cmd += " -attestation " + internal.DebugNitroAttestationB64
 		cmd += " -allowdebug"
 
@@ -90,7 +86,7 @@ func TestNitrite(t *testing.T) {
 
 	t.Run("cannot verify debug nitro attestation without allowdebug", func(t *testing.T) {
 		// given
-		cmd := "go run " + cmdPath
+		cmd := "go run main.go"
 		cmd += " -attestation " + internal.DebugNitroAttestationB64
 
 		// when
@@ -102,7 +98,7 @@ func TestNitrite(t *testing.T) {
 
 	t.Run("cannot verify self-signed attestation", func(t *testing.T) {
 		// given
-		cmd := "go run " + cmdPath
+		cmd := "go run main.go"
 		cmd += " -attestation " + internal.SelfSignedAttestationB64
 
 		// when
