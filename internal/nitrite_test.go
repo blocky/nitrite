@@ -67,7 +67,7 @@ func TestNitrite_Verify(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// when
-			result, err := internal.Verify(
+			doc, err := internal.Verify(
 				tt.attestation,
 				tt.certProvider,
 				internal.WithAttestationTime(),
@@ -80,7 +80,7 @@ func TestNitrite_Verify(t *testing.T) {
 			assert.Equal(
 				t,
 				tt.time.UTC(),
-				result.Document.CreatedAt().UTC(),
+				doc.CreatedAt().UTC(),
 			)
 		})
 

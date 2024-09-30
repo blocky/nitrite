@@ -47,51 +47,42 @@ func Verify(
 	verificationTime VerificationTimeFunc,
 	allowDebug bool,
 ) (
-	*Result,
+	Document,
 	error,
 ) {
 	coseSign1 := CoseSign1{}
 	err := coseSign1.UnmarshalBinary(attestation)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshaling CoseSign1 from attestation bytes: %w", err)
+		return Document{}, fmt.Errorf("unmarshaling CoseSign1 from attestation bytes: %w", err)
 	}
 
 	doc := Document{}
 	err = doc.UnmarshalBinary(coseSign1.Payload)
 	if nil != err {
-		return nil, fmt.Errorf("unmarshaling document from payload: %w", err)
+		return Document{}, fmt.Errorf("unmarshaling document from payload: %w", err)
 	}
 
 	docDebug, err := doc.Debug()
 	if err != nil {
-		return nil, fmt.Errorf("getting document debug: %w", err)
+		return Document{}, fmt.Errorf("getting document debug: %w", err)
 	}
 
 	if !allowDebug && docDebug {
-		return nil, fmt.Errorf("attestation was generated in debug mode")
+		return Document{}, fmt.Errorf("attestation was generated in debug mode")
 	}
 
 	certificates, err := doc.Verify(certProvider, verificationTime)
 	if err != nil {
-		return nil, fmt.Errorf("verifying document: %w", err)
+		return Document{}, fmt.Errorf("verifying document: %w", err)
 
 	}
 	if len(certificates) < 1 {
-		return nil, fmt.Errorf("certificates chain is empty")
+		return Document{}, fmt.Errorf("certificates chain is empty")
 	}
 
 	err = coseSign1.Verify(certificates[0].PublicKey.(*ecdsa.PublicKey))
 	if err != nil {
-		return nil, fmt.Errorf("verifying CoseSign1: %w", err)
+		return Document{}, fmt.Errorf("verifying CoseSign1: %w", err)
 	}
-
-	return &Result{
-		Document:     &doc,
-		Certificates: certificates,
-		Protected:    coseSign1.Protected,
-		Unprotected:  coseSign1.Unprotected,
-		Payload:      coseSign1.Payload,
-		Signature:    coseSign1.Signature,
-		COSESign1:    nil,
-	}, err
+	return doc, err
 }

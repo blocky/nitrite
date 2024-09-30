@@ -8,7 +8,6 @@ import (
 )
 
 type Document = internal.Document
-type Result = internal.Result
 
 type CertProvider int
 
@@ -103,16 +102,16 @@ func New(options ...VerifierConfigOption) (*Verifier, error) {
 	return verifier, nil
 }
 
-func (v *Verifier) Verify(attestation []byte) (*Result, error) {
-	result, err := internal.Verify(
+func (v *Verifier) Verify(attestation []byte) (Document, error) {
+	doc, err := internal.Verify(
 		attestation,
 		v.certProvider,
 		v.verificationTime,
 		v.allowDebug,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("verifying attestation: %w", err)
+		return Document{}, fmt.Errorf("verifying attestation: %w", err)
 	}
 
-	return result, nil
+	return doc, nil
 }
