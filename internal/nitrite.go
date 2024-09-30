@@ -79,9 +79,9 @@ func Verify(
 		return nil, fmt.Errorf("certificates chain is empty")
 	}
 
-	err = coseSign1.VerifySignature(certificates[0].PublicKey.(*ecdsa.PublicKey))
+	err = coseSign1.Verify(certificates[0].PublicKey.(*ecdsa.PublicKey))
 	if err != nil {
-		return nil, fmt.Errorf("verifying CoseSign1 signature: %w", err)
+		return nil, fmt.Errorf("verifying CoseSign1: %w", err)
 	}
 
 	return &Result{

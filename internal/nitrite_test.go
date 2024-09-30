@@ -179,6 +179,6 @@ func TestNitrite_Verify(t *testing.T) {
 		)
 
 		// then
-		assert.ErrorContains(t, err, "verifying CoseSign1 signature")
+		assert.ErrorContains(t, err, "verifying CoseSign1")
 	})
 }
