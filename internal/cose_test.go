@@ -61,10 +61,11 @@ func TestCoseSign1_Verify(t *testing.T) {
 			err := coseSign1.UnmarshalBinary(tt.attestation)
 			require.NoError(t, err)
 
-			doc, err := internal.MakeDocumentFromBytes(coseSign1.Payload)
+			doc := internal.Document{}
+			err = doc.UnmarshalBinary(coseSign1.Payload)
 			require.NoError(t, err)
 
-			certificates, err := doc.CheckCertificates(
+			certificates, err := doc.Verify(
 				tt.certProvider,
 				internal.WithAttestationTime(),
 			)
@@ -165,10 +166,11 @@ func TestCoseSign1_VerifySignature(t *testing.T) {
 			err := coseSign1.UnmarshalBinary(tt.attestation)
 			require.NoError(t, err)
 
-			doc, err := internal.MakeDocumentFromBytes(coseSign1.Payload)
+			doc := internal.Document{}
+			err = doc.UnmarshalBinary(coseSign1.Payload)
 			require.NoError(t, err)
 
-			certificates, err := doc.CheckCertificates(
+			certificates, err := doc.Verify(
 				tt.certProvider,
 				internal.WithAttestationTime(),
 			)

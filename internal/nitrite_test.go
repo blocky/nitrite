@@ -66,7 +66,6 @@ func TestNitrite_Verify(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			// when
 			result, err := internal.Verify(
 				tt.attestation,
@@ -127,7 +126,7 @@ func TestNitrite_Verify(t *testing.T) {
 		)
 
 		// then
-		assert.ErrorContains(t, err, "making document from payload")
+		assert.ErrorContains(t, err, "unmarshaling document from payload")
 	})
 
 	t.Run("debug mode not allowed", func(t *testing.T) {
@@ -145,7 +144,7 @@ func TestNitrite_Verify(t *testing.T) {
 		assert.ErrorContains(t, err, "attestation was generated in debug mode")
 	})
 
-	t.Run("invalid document certificate chain", func(t *testing.T) {
+	t.Run("verifying document", func(t *testing.T) {
 		// when
 		_, err = internal.Verify(
 			nitroAttestation,
@@ -155,10 +154,10 @@ func TestNitrite_Verify(t *testing.T) {
 		)
 
 		// then
-		assert.ErrorContains(t, err, "checking document certificates")
+		assert.ErrorContains(t, err, "verifying document")
 	})
 
-	t.Run("invalid CoseSign1 signature", func(t *testing.T) {
+	t.Run("verifying CoseSign1", func(t *testing.T) {
 		// given
 		nitroCoseSign1 := internal.CoseSign1{}
 		err := nitroCoseSign1.UnmarshalBinary(nitroAttestation)

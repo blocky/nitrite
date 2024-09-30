@@ -56,9 +56,10 @@ func Verify(
 		return nil, fmt.Errorf("unmarshaling CoseSign1 from attestation bytes: %w", err)
 	}
 
-	doc, err := MakeDocumentFromBytes(coseSign1.Payload)
+	doc := Document{}
+	err = doc.UnmarshalBinary(coseSign1.Payload)
 	if nil != err {
-		return nil, fmt.Errorf("making document from payload: %w", err)
+		return nil, fmt.Errorf("unmarshaling document from payload: %w", err)
 	}
 
 	docDebug, err := doc.Debug()
@@ -70,9 +71,9 @@ func Verify(
 		return nil, fmt.Errorf("attestation was generated in debug mode")
 	}
 
-	certificates, err := doc.CheckCertificates(certProvider, verificationTime)
+	certificates, err := doc.Verify(certProvider, verificationTime)
 	if err != nil {
-		return nil, fmt.Errorf("checking document certificates: %w", err)
+		return nil, fmt.Errorf("verifying document: %w", err)
 
 	}
 	if len(certificates) < 1 {

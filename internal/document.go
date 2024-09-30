@@ -22,25 +22,6 @@ type Document struct {
 	Nonce     []byte `cbor:"nonce" json:"nonce,omitempty"`
 }
 
-func MakeDocumentFromBytes(bytes []byte) (Document, error) {
-	doc := Document{}
-	err := cbor.Unmarshal(bytes, &doc)
-	if nil != err {
-		return Document{}, fmt.Errorf("unmarshaling document: %w", err)
-	}
-
-	err = doc.CheckMandatoryFields()
-	if err != nil {
-		return Document{}, fmt.Errorf("checking mandatory fields: %w", err)
-	}
-
-	err = doc.CheckOptionalFields()
-	if err != nil {
-		return Document{}, fmt.Errorf("checking optional fields: %w", err)
-	}
-	return doc, nil
-}
-
 func (doc Document) CreatedAt() time.Time {
 	if doc.Timestamp == 0 {
 		return time.Time{}
@@ -77,11 +58,32 @@ func (doc Document) Debug() (bool, error) {
 	return true, nil
 }
 
+func (doc Document) Verify(
+	certProvider CertProvider,
+	verificationTime VerificationTimeFunc,
+) ([]*x509.Certificate, error) {
+	err := doc.VerifyMandatoryFields()
+	if err != nil {
+		return nil, fmt.Errorf("verifying mandatory fields: %w", err)
+	}
+
+	err = doc.VerifyOptionalFields()
+	if err != nil {
+		return nil, fmt.Errorf("verifying optional fields: %w", err)
+	}
+
+	certificates, err := doc.VerifyCertificates(certProvider, verificationTime)
+	if err != nil {
+		return nil, fmt.Errorf("verifying certificates: %w", err)
+	}
+	return certificates, nil
+}
+
 func missingFieldError(field string) error {
 	return fmt.Errorf("missing %s", field)
 }
 
-func (doc Document) CheckMandatoryFields() error {
+func (doc Document) VerifyMandatoryFields() error {
 	if doc.ModuleID == "" {
 		return missingFieldError("module id")
 	}
@@ -126,7 +128,7 @@ func (doc Document) CheckMandatoryFields() error {
 	return nil
 }
 
-func (doc Document) CheckOptionalFields() error {
+func (doc Document) VerifyOptionalFields() error {
 	if len(doc.PublicKey) > MaxPublicKeyLen {
 		return fmt.Errorf(
 			"max public key len is '%v' but got '%v'",
@@ -153,7 +155,7 @@ func (doc Document) CheckOptionalFields() error {
 	return nil
 }
 
-func (doc Document) CheckCertificates(
+func (doc Document) VerifyCertificates(
 	certProvider CertProvider,
 	verificationTime VerificationTimeFunc,
 ) ([]*x509.Certificate, error) {
@@ -240,4 +242,8 @@ func (doc Document) CheckCertificates(
 	}
 
 	return certificates, nil
+}
+
+func (doc *Document) UnmarshalBinary(data []byte) error {
+	return cbor.Unmarshal(data, doc)
 }
