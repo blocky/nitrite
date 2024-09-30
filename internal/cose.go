@@ -30,33 +30,38 @@ type CoseHeader struct {
 	Alg interface{} `cbor:"1,keyasint,omitempty" json:"alg,omitempty"`
 }
 
-func MakeCoseSign1FromBytes(bytes []byte) (CoseSign1, error) {
-	coseSign1 := CoseSign1{}
-	err := cbor.Unmarshal(bytes, &coseSign1)
-	if nil != err {
-		return CoseSign1{}, fmt.Errorf("unmarshaling CoseSign1 from bytes: %w", err)
+func (c CoseSign1) Verify(
+	publicKey *ecdsa.PublicKey,
+) error {
+	if len(c.Protected) == 0 {
+		return fmt.Errorf("missing cose protected headers")
 	}
 
-	if len(coseSign1.Protected) == 0 {
-		return CoseSign1{}, fmt.Errorf("missing cose protected headers")
+	if len(c.Payload) == 0 {
+		return fmt.Errorf("missing cose payload")
 	}
 
-	if len(coseSign1.Payload) == 0 {
-		return CoseSign1{}, fmt.Errorf("missing cose payload")
+	if len(c.Signature) == 0 {
+		return fmt.Errorf("missing cose signature")
 	}
 
-	if len(coseSign1.Signature) == 0 {
-		return CoseSign1{}, fmt.Errorf("missing cose signature")
+	err := c.VerifySignature(publicKey)
+	if err != nil {
+		return fmt.Errorf("verifying signature: %w", err)
 	}
-	return coseSign1, nil
+	return nil
 }
 
-func (c CoseSign1) CheckSignature(
+func (c CoseSign1) VerifySignature(
 	publicKey *ecdsa.PublicKey,
-) ([]byte, error) {
+) error {
+	if publicKey == nil {
+		return fmt.Errorf("public key is nil")
+	}
+
 	signingAlg, err := c.GetSigningAlgorithm()
 	if err != nil {
-		return nil, fmt.Errorf("extracting signing algorithm: %w", err)
+		return fmt.Errorf("extracting signing algorithm: %w", err)
 	}
 
 	// https://datatracker.ietf.org/doc/html/rfc8152#section-4.4
@@ -76,14 +81,14 @@ func (c CoseSign1) CheckSignature(
 
 	sigStructBytes, err := cbor.Marshal(&sigStruct)
 	if err != nil {
-		return nil, fmt.Errorf("marshaling cose signature struct: %w", err)
+		return fmt.Errorf("marshaling cose signature struct: %w", err)
 	}
 
 	var sigStructHash []byte
 	switch signingAlg {
 	case ES384:
 		if publicKey.Curve.Params().Name != "P-384" {
-			return nil, fmt.Errorf(
+			return fmt.Errorf(
 				"cose signing alg '%v' does not match public key signing alg '%s'",
 				signingAlg,
 				publicKey.Curve.Params().Name,
@@ -93,11 +98,11 @@ func (c CoseSign1) CheckSignature(
 		h := sha512.Sum384(sigStructBytes)
 		sigStructHash = h[:]
 	default:
-		return nil, fmt.Errorf("unsupported signing alg '%v'", signingAlg)
+		return fmt.Errorf("unsupported signing alg '%v'", signingAlg)
 	}
 
 	if len(c.Signature) != 2*len(sigStructHash) {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"expected signature len '%v' got '%v'",
 			2*len(sigStructHash),
 			len(c.Signature),
@@ -111,9 +116,13 @@ func (c CoseSign1) CheckSignature(
 
 	signatureOK := ecdsa.Verify(publicKey, sigStructHash, r, s)
 	if !signatureOK {
-		return nil, fmt.Errorf("failed to verify ecdsa signature")
+		return fmt.Errorf("failed to verify ecdsa signature")
 	}
-	return sigStructBytes, nil
+	return nil
+}
+
+func (c *CoseSign1) UnmarshalBinary(data []byte) error {
+	return cbor.Unmarshal(data, c)
 }
 
 func (c CoseSign1) GetSigningAlgorithm() (SigningAlgorithm, error) {

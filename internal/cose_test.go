@@ -13,124 +13,52 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMakeCoseSign1FromBytes(t *testing.T) {
-	happyPathTests := []struct {
-		name           string
-		attestationB64 string
-	}{
-		{
-			"happy path - nitro",
-			internal.NitroAttestationB64,
-		},
-		{
-			"happy path - debug",
-			internal.DebugNitroAttestationB64,
-		},
-		{
-			"happy path - self signed",
-			internal.SelfSignedAttestationB64,
-		},
-	}
-	for _, tt := range happyPathTests {
-		t.Run(tt.name, func(t *testing.T) {
-			// given
-			attestation, err := base64.StdEncoding.DecodeString(tt.attestationB64)
-			require.NoError(t, err)
-
-			// when
-			_, err = internal.MakeCoseSign1FromBytes(attestation)
-
-			// then
-			assert.NoError(t, err)
-		})
-	}
-
-	t.Run("unmarshaling CoseSign1", func(t *testing.T) {
-		// given
-
-		// when
-		_, err := internal.MakeCoseSign1FromBytes([]byte{0})
-
-		// then
-		assert.ErrorContains(t, err, "unmarshaling CoseSign1 from bytes")
-	})
-
-	t.Run("missing protected", func(t *testing.T) {
-		// given
-		coseSign1 := internal.CoseSign1{}
-		bytes, err := cbor.Marshal(coseSign1)
-		require.NoError(t, err)
-
-		// when
-		_, err = internal.MakeCoseSign1FromBytes(bytes)
-
-		// then
-		assert.ErrorContains(t, err, "missing cose protected headers")
-	})
-
-	t.Run("missing payload", func(t *testing.T) {
-		// given
-		coseSign1 := internal.CoseSign1{Protected: []byte{0}}
-		bytes, err := cbor.Marshal(coseSign1)
-		require.NoError(t, err)
-
-		// when
-		_, err = internal.MakeCoseSign1FromBytes(bytes)
-
-		// then
-		assert.ErrorContains(t, err, "missing cose payload")
-	})
-
-	t.Run("missing signature", func(t *testing.T) {
-		// given
-		coseSign1 := internal.CoseSign1{
-			Protected: []byte{0},
-			Payload:   []byte{0},
-		}
-		bytes, err := cbor.Marshal(coseSign1)
-		require.NoError(t, err)
-
-		// when
-		_, err = internal.MakeCoseSign1FromBytes(bytes)
-
-		// then
-		assert.ErrorContains(t, err, "missing cose signature")
-	})
+func initAttestations(t *testing.T) (
+	[]byte,
+	[]byte,
+	[]byte,
+) {
+	nitroAtt, err := base64.StdEncoding.DecodeString(internal.NitroAttestationB64)
+	require.NoError(t, err)
+	debugAtt, err := base64.StdEncoding.DecodeString(internal.DebugNitroAttestationB64)
+	require.NoError(t, err)
+	selfAtt, err := base64.StdEncoding.DecodeString(internal.SelfSignedAttestationB64)
+	require.NoError(t, err)
+	return nitroAtt, debugAtt, selfAtt
 }
 
-func TestCoseSign1_CheckSignature(t *testing.T) {
+func TestCoseSign1_Verify(t *testing.T) {
+	nitroAtt, debugAtt, selfAtt := initAttestations(t)
 	happyPathTests := []struct {
-		name           string
-		attestationB64 string
-		certProvider   internal.CertProvider
+		name         string
+		attestation  []byte
+		certProvider internal.CertProvider
 	}{
 		{
-			name:           "happy path - nitro",
-			attestationB64: internal.NitroAttestationB64,
+			name:        "happy path - nitro",
+			attestation: nitroAtt,
 			certProvider: internal.NewNitroCertProvider(
 				internal.NewEmbeddedRootCertZipReader(),
 			),
 		},
 		{
-			name:           "happy path - debug",
-			attestationB64: internal.DebugNitroAttestationB64,
+			name:        "happy path - debug",
+			attestation: debugAtt,
 			certProvider: internal.NewNitroCertProvider(
 				internal.NewEmbeddedRootCertZipReader(),
 			),
 		},
 		{
-			name:           "happy path - self signed",
-			attestationB64: internal.SelfSignedAttestationB64,
-			certProvider:   internal.NewSelfSignedCertProvider(),
+			name:         "happy path - self signed",
+			attestation:  selfAtt,
+			certProvider: internal.NewSelfSignedCertProvider(),
 		},
 	}
 	for _, tt := range happyPathTests {
 		t.Run(tt.name, func(t *testing.T) {
 			// given
-			attestation, err := base64.StdEncoding.DecodeString(tt.attestationB64)
-			require.NoError(t, err)
-
-			coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
+			coseSign1 := internal.CoseSign1{}
+			err := coseSign1.UnmarshalBinary(tt.attestation)
 			require.NoError(t, err)
 
 			doc, err := internal.MakeDocumentFromBytes(coseSign1.Payload)
@@ -143,7 +71,111 @@ func TestCoseSign1_CheckSignature(t *testing.T) {
 			require.NoError(t, err)
 
 			// when
-			_, err = coseSign1.CheckSignature(
+			err = coseSign1.Verify(certificates[0].PublicKey.(*ecdsa.PublicKey))
+
+			// then
+			assert.NoError(t, err)
+		})
+	}
+
+	t.Run("verifying signature", func(t *testing.T) {
+		// given
+		coseSign1 := internal.CoseSign1{}
+		err := coseSign1.UnmarshalBinary(nitroAtt)
+		require.NoError(t, err)
+
+		privKey, err := ecdsa.GenerateKey(elliptic.P224(), rand.Reader)
+		require.NoError(t, err)
+
+		// when
+		err = coseSign1.Verify(&privKey.PublicKey)
+
+		// then
+		assert.ErrorContains(t, err, "verifying signature")
+	})
+
+	t.Run("missing protected", func(t *testing.T) {
+		// given
+		coseSign1 := internal.CoseSign1{}
+
+		// when
+		err := coseSign1.Verify(nil)
+
+		// then
+		assert.ErrorContains(t, err, "missing cose protected headers")
+	})
+
+	t.Run("missing payload", func(t *testing.T) {
+		// given
+		coseSign1 := internal.CoseSign1{Protected: []byte{0}}
+
+		// when
+		err := coseSign1.Verify(nil)
+
+		// then
+		assert.ErrorContains(t, err, "missing cose payload")
+	})
+
+	t.Run("missing signature", func(t *testing.T) {
+		// given
+		coseSign1 := internal.CoseSign1{
+			Protected: []byte{0},
+			Payload:   []byte{0},
+		}
+
+		// when
+		err := coseSign1.Verify(nil)
+
+		// then
+		assert.ErrorContains(t, err, "missing cose signature")
+	})
+}
+
+func TestCoseSign1_VerifySignature(t *testing.T) {
+	nitroAtt, debugAtt, selfAtt := initAttestations(t)
+	happyPathTests := []struct {
+		name         string
+		attestation  []byte
+		certProvider internal.CertProvider
+	}{
+		{
+			name:        "happy path - nitro",
+			attestation: nitroAtt,
+			certProvider: internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
+		},
+		{
+			name:        "happy path - debug",
+			attestation: debugAtt,
+			certProvider: internal.NewNitroCertProvider(
+				internal.NewEmbeddedRootCertZipReader(),
+			),
+		},
+		{
+			name:         "happy path - self signed",
+			attestation:  selfAtt,
+			certProvider: internal.NewSelfSignedCertProvider(),
+		},
+	}
+	for _, tt := range happyPathTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// given
+			coseSign1 := internal.CoseSign1{}
+			err := coseSign1.UnmarshalBinary(tt.attestation)
+			require.NoError(t, err)
+
+			doc, err := internal.MakeDocumentFromBytes(coseSign1.Payload)
+			require.NoError(t, err)
+
+			certificates, err := doc.CheckCertificates(
+				tt.certProvider,
+				internal.WithAttestationTime(),
+			)
+			require.NoError(t, err)
+
+			// when
+			err = coseSign1.VerifySignature(
 				certificates[0].PublicKey.(*ecdsa.PublicKey),
 			)
 
@@ -155,9 +187,11 @@ func TestCoseSign1_CheckSignature(t *testing.T) {
 	t.Run("error getting signing algorithm from CoseSign1", func(t *testing.T) {
 		// given
 		coseSign1 := internal.CoseSign1{}
+		privKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+		require.NoError(t, err)
 
 		// when
-		_, err := coseSign1.CheckSignature(nil)
+		err = coseSign1.VerifySignature(&privKey.PublicKey)
 
 		// then
 		assert.ErrorContains(t, err, "extracting signing algorithm")
@@ -165,17 +199,15 @@ func TestCoseSign1_CheckSignature(t *testing.T) {
 
 	t.Run("incorrect public key signing algorithm", func(t *testing.T) {
 		// given
-		attestation, err := base64.StdEncoding.DecodeString(internal.NitroAttestationB64)
-		require.NoError(t, err)
-
-		coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
+		coseSign1 := internal.CoseSign1{}
+		err := coseSign1.UnmarshalBinary(nitroAtt)
 		require.NoError(t, err)
 
 		privKey, err := ecdsa.GenerateKey(elliptic.P224(), rand.Reader)
 		require.NoError(t, err)
 
 		// when
-		_, err = coseSign1.CheckSignature(&privKey.PublicKey)
+		err = coseSign1.VerifySignature(&privKey.PublicKey)
 
 		// then
 		assert.ErrorContains(t, err, "does not match public key signing alg")
@@ -183,10 +215,8 @@ func TestCoseSign1_CheckSignature(t *testing.T) {
 
 	t.Run("incorrect signature length", func(t *testing.T) {
 		// given
-		attestation, err := base64.StdEncoding.DecodeString(internal.NitroAttestationB64)
-		require.NoError(t, err)
-
-		coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
+		coseSign1 := internal.CoseSign1{}
+		err := coseSign1.UnmarshalBinary(nitroAtt)
 		require.NoError(t, err)
 		coseSign1.Signature = nil
 
@@ -194,7 +224,7 @@ func TestCoseSign1_CheckSignature(t *testing.T) {
 		require.NoError(t, err)
 
 		// when
-		_, err = coseSign1.CheckSignature(&privKey.PublicKey)
+		err = coseSign1.VerifySignature(&privKey.PublicKey)
 
 		// then
 		assert.ErrorContains(t, err, "expected signature len")
@@ -202,17 +232,14 @@ func TestCoseSign1_CheckSignature(t *testing.T) {
 
 	t.Run("incorrect public key", func(t *testing.T) {
 		// given
-		attestation, err := base64.StdEncoding.DecodeString(internal.NitroAttestationB64)
+		coseSign1 := internal.CoseSign1{}
+		err := coseSign1.UnmarshalBinary(nitroAtt)
 		require.NoError(t, err)
-
-		coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
-		require.NoError(t, err)
-
 		privKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 		require.NoError(t, err)
 
 		// when
-		_, err = coseSign1.CheckSignature(&privKey.PublicKey)
+		err = coseSign1.VerifySignature(&privKey.PublicKey)
 
 		// then
 		assert.ErrorContains(t, err, "failed to verify ecdsa signature")
@@ -220,30 +247,29 @@ func TestCoseSign1_CheckSignature(t *testing.T) {
 }
 
 func TestCoseSign1_GetSigningAlgorithm(t *testing.T) {
+	nitroAtt, debugAtt, selfAtt := initAttestations(t)
 	happyPathTests := []struct {
-		name           string
-		attestationB64 string
+		name        string
+		attestation []byte
 	}{
 		{
-			name:           "happy path - nitro",
-			attestationB64: internal.NitroAttestationB64,
+			name:        "happy path - nitro",
+			attestation: nitroAtt,
 		},
 		{
-			name:           "happy path - debug",
-			attestationB64: internal.DebugNitroAttestationB64,
+			name:        "happy path - debug",
+			attestation: debugAtt,
 		},
 		{
-			name:           "happy path - self signed",
-			attestationB64: internal.SelfSignedAttestationB64,
+			name:        "happy path - self signed",
+			attestation: selfAtt,
 		},
 	}
 	for _, tt := range happyPathTests {
 		t.Run(tt.name, func(t *testing.T) {
 			// given
-			attestation, err := base64.StdEncoding.DecodeString(tt.attestationB64)
-			require.NoError(t, err)
-
-			coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
+			coseSign1 := internal.CoseSign1{}
+			err := coseSign1.UnmarshalBinary(tt.attestation)
 			require.NoError(t, err)
 
 			// when
@@ -257,10 +283,8 @@ func TestCoseSign1_GetSigningAlgorithm(t *testing.T) {
 
 	t.Run("unmarshaling cose header", func(t *testing.T) {
 		// given
-		attestation, err := base64.StdEncoding.DecodeString(internal.NitroAttestationB64)
-		require.NoError(t, err)
-
-		coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
+		coseSign1 := internal.CoseSign1{}
+		err := coseSign1.UnmarshalBinary(nitroAtt)
 		require.NoError(t, err)
 		coseSign1.Protected = nil
 
@@ -274,10 +298,8 @@ func TestCoseSign1_GetSigningAlgorithm(t *testing.T) {
 
 	t.Run("unsupported signing algorithm type", func(t *testing.T) {
 		// given
-		attestation, err := base64.StdEncoding.DecodeString(internal.NitroAttestationB64)
-		require.NoError(t, err)
-
-		coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
+		coseSign1 := internal.CoseSign1{}
+		err := coseSign1.UnmarshalBinary(nitroAtt)
 		require.NoError(t, err)
 
 		coseHeader := internal.CoseHeader{}

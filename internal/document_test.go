@@ -29,7 +29,8 @@ func initDocuments(t *testing.T) (
 		attestation, err := base64.StdEncoding.DecodeString(att64String)
 		require.NoError(t, err)
 
-		coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
+		coseSign1 := internal.CoseSign1{}
+		err = coseSign1.UnmarshalBinary(attestation)
 		require.NoError(t, err)
 
 		err = cbor.Unmarshal(coseSign1.Payload, &docs[i])
@@ -63,7 +64,8 @@ func TestMakeDocumentFromBytes(t *testing.T) {
 			attestation, err := base64.StdEncoding.DecodeString(tt.attestationB64)
 			require.NoError(t, err)
 
-			coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
+			coseSign1 := internal.CoseSign1{}
+			err = coseSign1.UnmarshalBinary(attestation)
 			require.NoError(t, err)
 
 			// when
@@ -93,7 +95,8 @@ func TestMakeDocumentFromBytes(t *testing.T) {
 		attestation, err := base64.StdEncoding.DecodeString(internal.NitroAttestationB64)
 		require.NoError(t, err)
 
-		coseSign1, err := internal.MakeCoseSign1FromBytes(attestation)
+		coseSign1 := internal.CoseSign1{}
+		err = coseSign1.UnmarshalBinary(attestation)
 		require.NoError(t, err)
 
 		doc := internal.Document{}

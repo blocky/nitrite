@@ -18,6 +18,7 @@ import (
 // string.
 
 func TestNitrite_Verify(t *testing.T) {
+	// TODO: Place into initAttestations to share with other tests?
 	nitroAttestation, err := base64.StdEncoding.DecodeString(
 		internal.NitroAttestationB64,
 	)
@@ -101,12 +102,13 @@ func TestNitrite_Verify(t *testing.T) {
 		)
 
 		// then
-		assert.ErrorContains(t, err, "making CoseSign1 from attestation bytes")
+		assert.ErrorContains(t, err, "unmarshaling CoseSign1 from attestation bytes")
 	})
 
 	t.Run("invalid document", func(t *testing.T) {
 		// given
-		nitroCoseSign1, err := internal.MakeCoseSign1FromBytes(nitroAttestation)
+		nitroCoseSign1 := internal.CoseSign1{}
+		err := nitroCoseSign1.UnmarshalBinary(nitroAttestation)
 		require.NoError(t, err)
 		require.NoError(t, err)
 
@@ -158,8 +160,8 @@ func TestNitrite_Verify(t *testing.T) {
 
 	t.Run("invalid CoseSign1 signature", func(t *testing.T) {
 		// given
-		nitroCoseSign1, err := internal.MakeCoseSign1FromBytes(nitroAttestation)
-		require.NoError(t, err)
+		nitroCoseSign1 := internal.CoseSign1{}
+		err := nitroCoseSign1.UnmarshalBinary(nitroAttestation)
 		require.NoError(t, err)
 
 		nitroCoseSign1.Signature = []byte("not a valid signature")
@@ -177,6 +179,6 @@ func TestNitrite_Verify(t *testing.T) {
 		)
 
 		// then
-		assert.ErrorContains(t, err, "checking CoseSign1 signature")
+		assert.ErrorContains(t, err, "verifying CoseSign1 signature")
 	})
 }

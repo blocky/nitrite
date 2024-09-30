@@ -50,9 +50,10 @@ func Verify(
 	*Result,
 	error,
 ) {
-	coseSign1, err := MakeCoseSign1FromBytes(attestation)
+	coseSign1 := CoseSign1{}
+	err := coseSign1.UnmarshalBinary(attestation)
 	if err != nil {
-		return nil, fmt.Errorf("making CoseSign1 from attestation bytes: %w", err)
+		return nil, fmt.Errorf("unmarshaling CoseSign1 from attestation bytes: %w", err)
 	}
 
 	doc, err := MakeDocumentFromBytes(coseSign1.Payload)
@@ -78,9 +79,9 @@ func Verify(
 		return nil, fmt.Errorf("certificates chain is empty")
 	}
 
-	sigStruct, err := coseSign1.CheckSignature(certificates[0].PublicKey.(*ecdsa.PublicKey))
+	err = coseSign1.VerifySignature(certificates[0].PublicKey.(*ecdsa.PublicKey))
 	if err != nil {
-		return nil, fmt.Errorf("checking CoseSign1 signature: %w", err)
+		return nil, fmt.Errorf("verifying CoseSign1 signature: %w", err)
 	}
 
 	return &Result{
@@ -90,6 +91,6 @@ func Verify(
 		Unprotected:  coseSign1.Unprotected,
 		Payload:      coseSign1.Payload,
 		Signature:    coseSign1.Signature,
-		COSESign1:    sigStruct,
+		COSESign1:    nil,
 	}, err
 }
