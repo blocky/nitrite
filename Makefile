@@ -14,8 +14,6 @@ test-unit: tidy
 test-integration: tidy
 	@go test -v ./test/integration/... -count=1
 
-TESTDATA=internal/testdata
-NITRITE_CMD=cmd/nitrite/main.go
 .PHONY: test-main
 test-main: tidy
 	@go test -v ./cmd/nitrite/... -count=1
