@@ -96,6 +96,20 @@ func TestExec(t *testing.T) {
 		assert.ErrorContains(t, err, "attestation was generated in debug mode")
 	})
 
+	t.Run("self-signed attestation", func(t *testing.T) {
+		// given
+		cmd := "go run main.go"
+		cmd += " -attestation " + internal.SelfSignedAttestationB64
+		cmd += " -allowselfsigned"
+
+		// when
+		outDoc, err := runNitriteWithEnv(cmd, nil)
+
+		// then
+		require.NoError(t, err)
+		assert.NotEmpty(t, outDoc)
+	})
+
 	t.Run("cannot verify self-signed attestation", func(t *testing.T) {
 		// given
 		cmd := "go run main.go"
