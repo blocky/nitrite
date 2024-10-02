@@ -4,6 +4,8 @@ import (
 	"crypto/x509"
 	"fmt"
 	"time"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 // Document represents the AWS Nitro Enclave Attestation Document.
@@ -60,19 +62,19 @@ func (doc Document) Verify(
 	certProvider CertProvider,
 	verificationTime VerificationTimeFunc,
 ) ([]*x509.Certificate, error) {
-	err := doc.CheckMandatoryFields()
+	err := doc.VerifyMandatoryFields()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("verifying mandatory fields: %w", err)
 	}
 
-	err = doc.CheckOptionalFields()
+	err = doc.VerifyOptionalFields()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("verifying optional fields: %w", err)
 	}
 
-	certificates, err := doc.CheckCertificates(certProvider, verificationTime)
+	certificates, err := doc.VerifyCertificates(certProvider, verificationTime)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("verifying certificates: %w", err)
 	}
 	return certificates, nil
 }
@@ -81,7 +83,7 @@ func missingFieldError(field string) error {
 	return fmt.Errorf("missing %s", field)
 }
 
-func (doc Document) CheckMandatoryFields() error {
+func (doc Document) VerifyMandatoryFields() error {
 	if doc.ModuleID == "" {
 		return missingFieldError("module id")
 	}
@@ -126,7 +128,7 @@ func (doc Document) CheckMandatoryFields() error {
 	return nil
 }
 
-func (doc Document) CheckOptionalFields() error {
+func (doc Document) VerifyOptionalFields() error {
 	if len(doc.PublicKey) > MaxPublicKeyLen {
 		return fmt.Errorf(
 			"max public key len is '%v' but got '%v'",
@@ -153,7 +155,7 @@ func (doc Document) CheckOptionalFields() error {
 	return nil
 }
 
-func (doc Document) CheckCertificates(
+func (doc Document) VerifyCertificates(
 	certProvider CertProvider,
 	verificationTime VerificationTimeFunc,
 ) ([]*x509.Certificate, error) {
@@ -240,4 +242,8 @@ func (doc Document) CheckCertificates(
 	}
 
 	return certificates, nil
+}
+
+func (doc *Document) UnmarshalBinary(data []byte) error {
+	return cbor.Unmarshal(data, doc)
 }

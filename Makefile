@@ -32,7 +32,7 @@ test-main: tidy
 
 
 .PHONY: test
-test: test-unit test-main
+test: test-unit test-integration test-main
 
 .PHONY: pre-pr
 pre-pr: mock lint test
