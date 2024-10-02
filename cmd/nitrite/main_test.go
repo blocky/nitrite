@@ -59,6 +59,8 @@ func runNitriteWithEnv(
 }
 
 func TestExec(t *testing.T) {
+	// TODO: Remove the self-signed attestation test case as a part of
+	//  https://blocky.atlassian.net/browse/BKY-5620
 	happyPathTests := []struct {
 		name        string
 		attestation string
@@ -128,6 +130,10 @@ func TestExec(t *testing.T) {
 		// then
 		assert.ErrorContains(t, err, "attestation was generated in debug mode")
 	})
+
+	// TODO: As a part of https://blocky.atlassian.net/browse/BKY-5620,
+	//  we are removing the self-signed attestation test case. Consider keeping
+	//  this test case and removing this comment only.
 
 	t.Run("cannot verify self-signed attestation without allowselfsigned", func(t *testing.T) {
 		// given

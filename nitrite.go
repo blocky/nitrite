@@ -14,6 +14,8 @@ type CertProvider int
 const (
 	EmbeddedNitroCertProvider CertProvider = iota
 	FetchingNitroCertProvider
+	// Deprecated: Remove SelfSignedCertProvider as a part of
+	//  https://blocky.atlassian.net/browse/BKY-5620
 	SelfSignedCertProvider
 )
 

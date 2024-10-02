@@ -9,3 +9,11 @@ linters:
     - staticcheck
     - typecheck
     - unused
+issues:
+  exclude:
+    - "SA1019: internal.NewSelfSignedCertProvider is deprecated: Remove NewSelfSignedCertProvider as part of https://blocky.atlassian.net/browse/BKY-5620"
+    - "SA1019: nitrite.SelfSignedCertProvider is deprecated: Remove SelfSignedCertProvider as a part of  https://blocky.atlassian.net/browse/BKY-5620"
+    - "SA1019: internal.SelfSignedAttestationB64 is deprecated: Remove SelfSignedAttestationB64 as a part of https://blocky.atlassian.net/browse/BKY-5620"
+    - "SA1019: internal.SelfSignedAttestationTime is deprecated: Remove SelfSignedAttestationTime as a part of https://blocky.atlassian.net/browse/BKY-5620"
+
+# TODO: Remove the exclude directives as part of https://blocky.atlassian.net/browse/BKY-5620
