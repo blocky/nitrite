@@ -408,7 +408,7 @@ func TestDocument_VerifyOptionalFields(t *testing.T) {
 	t.Run("nonce too long", func(t *testing.T) {
 		// given
 		doc := nitroDoc
-		doc.Nonce = make([]byte, 1025)
+		doc.Nonce = make([]byte, internal.MaxNonceLen+1)
 
 		// when
 		err := doc.VerifyOptionalFields()
