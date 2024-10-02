@@ -1,3 +1,6 @@
+# The idiomatic way to disable test caching explicitly is to use -count=1
+GOTEST=go test -count=1
+
 .PHONY: tidy
 tidy:
 	@go mod tidy
@@ -8,16 +11,15 @@ lint: tidy
 
 .PHONY: test-unit
 test-unit: tidy
-	@go test -short ./...
+	@$(GOTEST) -short ./...
 
 .PHONY: test-integration
 test-integration: tidy
-	@go test -v ./test/integration/... -count=1
+	@$(GOTEST) -v ./test/integration/...
 
 .PHONY: test-main
 test-main: tidy
-	@go test -v ./cmd/nitrite/... -count=1
-
+	@$(GOTEST) -v ./cmd/nitrite/...
 
 .PHONY: test
 test: test-unit test-main
