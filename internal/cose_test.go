@@ -172,6 +172,17 @@ func TestCoseSign1_VerifySignature(t *testing.T) {
 		})
 	}
 
+	t.Run("nil public key", func(t *testing.T) {
+		// given
+		coseSign1 := internal.CoseSign1{}
+
+		// when
+		err := coseSign1.VerifySignature(nil)
+
+		// then
+		assert.ErrorContains(t, err, "public key is nil")
+	})
+
 	t.Run("error getting signing algorithm from CoseSign1", func(t *testing.T) {
 		// given
 		coseSign1 := internal.CoseSign1{}
