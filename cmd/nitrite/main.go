@@ -58,14 +58,14 @@ func main() {
 		os.Exit(2)
 	}
 
-	res, err := verifier.Verify(attestation)
+	doc, err := verifier.Verify(attestation)
 	if err != nil {
 		err = fmt.Errorf("verifying attestation: %w", err)
 		slog.Error(err.Error())
 		os.Exit(2)
 	}
 
-	enc, err := json.Marshal(res.Document)
+	enc, err := json.Marshal(doc)
 	if err != nil {
 		err = fmt.Errorf("marshalling attestation: %w", err)
 		slog.Error(err.Error())

@@ -104,8 +104,8 @@ func TestExec(t *testing.T) {
 				cmd += " -allowselfsigned"
 			}
 
-			// when
-			outDoc, err := runNitriteWithEnv(cmd, nil)
+		// when
+		outDoc, err := runNitriteWithEnv(cmd, nil)
 
 			// then
 			require.NoError(t, err)
