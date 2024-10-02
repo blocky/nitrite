@@ -396,7 +396,7 @@ func TestDocument_VerifyOptionalFields(t *testing.T) {
 	t.Run("user data too long", func(t *testing.T) {
 		// given
 		doc := nitroDoc
-		doc.UserData = make([]byte, 1025)
+		doc.UserData = make([]byte, internal.MaxUserDataLen+1)
 
 		// when
 		err := doc.VerifyOptionalFields()
