@@ -13,6 +13,10 @@ var NitroAttestationTime = time.Date(2024, time.September, 7, 14, 37, 39, 545000
 var DebugNitroAttestationB64 string
 var DebugNitroAttestationTime = time.Date(2024, time.September, 7, 14, 38, 6, 508000000, time.UTC)
 
+// Deprecated: Remove self-signed cert provider as a part of https://blocky.atlassian.net/browse/BKY-5620
+//
 //go:embed testdata/selfsigned_attestation.b64
 var SelfSignedAttestationB64 string
+
+// Deprecated: Remove self-signed cert provider as a part of https://blocky.atlassian.net/browse/BKY-5620
 var SelfSignedAttestationTime = time.Date(2024, time.April, 17, 18, 51, 46, 0, time.UTC)
