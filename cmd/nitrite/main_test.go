@@ -1,11 +1,13 @@
 package main_test
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/ionrock/procs"
 	"github.com/stretchr/testify/assert"
@@ -57,32 +59,64 @@ func runNitriteWithEnv(
 }
 
 func TestExec(t *testing.T) {
-	t.Run("nitro attestation", func(t *testing.T) {
-		// given
-		cmd := "go run main.go"
-		cmd += " -attestation " + internal.NitroAttestationB64
+	happyPathTests := []struct {
+		name        string
+		attestation string
+		debug       bool
+		selfSigned  bool
+		time        time.Time
+		wantPCR0    string
+	}{
+		{
+			name:        "happy path - nitro",
+			attestation: internal.NitroAttestationB64,
+			debug:       false,
+			selfSigned:  false,
+			time:        internal.NitroAttestationTime,
+			wantPCR0:    "5ypGyoCiYPsEShJUQvDH4zGBO8uvlyTZ84V3WJknZvLWVxCieqlK45Sd1U58n+hq",
+		},
+		{
+			name:        "happy path - debug nitro",
+			attestation: internal.DebugNitroAttestationB64,
+			debug:       true,
+			selfSigned:  false,
+			time:        internal.DebugNitroAttestationTime,
+			wantPCR0:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		},
+		{
+			name:        "happy path - self signed",
+			attestation: internal.SelfSignedAttestationB64,
+			debug:       false,
+			selfSigned:  true,
+			time:        internal.SelfSignedAttestationTime,
+			wantPCR0:    "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw",
+		},
+	}
+	for _, tt := range happyPathTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// given
+			cmd := "go run main.go"
+			cmd += " -attestation " + tt.attestation
+			if tt.debug {
+				cmd += " -allowdebug"
+			}
+			if tt.selfSigned {
+				cmd += " -allowselfsigned"
+			}
 
-		// when
-		outDoc, err := runNitriteWithEnv(cmd, nil)
+			// when
+			outDoc, err := runNitriteWithEnv(cmd, nil)
 
-		// then
-		require.NoError(t, err)
-		assert.NotEmpty(t, outDoc)
-	})
-
-	t.Run("debug nitro attestation", func(t *testing.T) {
-		// given
-		cmd := "go run main.go"
-		cmd += " -attestation " + internal.DebugNitroAttestationB64
-		cmd += " -allowdebug"
-
-		// when
-		outDoc, err := runNitriteWithEnv(cmd, nil)
-
-		// then
-		require.NoError(t, err)
-		assert.NotEmpty(t, outDoc)
-	})
+			// then
+			require.NoError(t, err)
+			assert.Equal(t, tt.time, outDoc.CreatedAt().UTC())
+			assert.Equal(t, tt.wantPCR0, base64.StdEncoding.EncodeToString(outDoc.PCRs[0]))
+			gotDebug, err := outDoc.Debug()
+			require.NoError(t, err)
+			assert.Equal(t, tt.debug, gotDebug)
+			assert.NotEmpty(t, outDoc.PublicKey)
+		})
+	}
 
 	t.Run("cannot verify debug nitro attestation without allowdebug", func(t *testing.T) {
 		// given
@@ -96,21 +130,7 @@ func TestExec(t *testing.T) {
 		assert.ErrorContains(t, err, "attestation was generated in debug mode")
 	})
 
-	t.Run("self-signed attestation", func(t *testing.T) {
-		// given
-		cmd := "go run main.go"
-		cmd += " -attestation " + internal.SelfSignedAttestationB64
-		cmd += " -allowselfsigned"
-
-		// when
-		outDoc, err := runNitriteWithEnv(cmd, nil)
-
-		// then
-		require.NoError(t, err)
-		assert.NotEmpty(t, outDoc)
-	})
-
-	t.Run("cannot verify self-signed attestation", func(t *testing.T) {
+	t.Run("cannot verify self-signed attestation without allowselfsigned", func(t *testing.T) {
 		// given
 		cmd := "go run main.go"
 		cmd += " -attestation " + internal.SelfSignedAttestationB64
