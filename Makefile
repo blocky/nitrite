@@ -12,23 +12,11 @@ test-unit: tidy
 
 .PHONY: test-integration
 test-integration: tidy
-	@go test -v ./test/integration/...
+	@go test -v ./test/integration/... -count=1
 
-TESTDATA=internal/testdata
-NITRITE_CMD=cmd/nitrite/main.go
 .PHONY: test-main
 test-main: tidy
-	@cat $(TESTDATA)/nitro_attestation.b64 | \
-		go run $(NITRITE_CMD) 1>/dev/null
-	@cat $(TESTDATA)/nitro_attestation_debug.b64 | \
-		go run $(NITRITE_CMD) -allowdebug 1>/dev/null
-	@$(shell cat $(TESTDATA)/nitro_attestation_debug.b64 | \
-    	go run $(NITRITE_CMD) 2>/dev/null)
-	@if [ $(.SHELLSTATUS) -eq 0 ]; then \
-		echo "error\t$(NITRITE_CMD) should have failed without -allowdebug"; \
-		exit 1; \
-	fi
-	@echo "ok\t$(NITRITE_CMD)"
+	@go test -v ./cmd/nitrite/... -count=1
 
 
 .PHONY: test
