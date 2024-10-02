@@ -25,7 +25,7 @@ func initAttestations(t *testing.T) (
 	require.NoError(t, err)
 	debugAtt, err := base64.StdEncoding.DecodeString(internal.DebugNitroAttestationB64)
 	require.NoError(t, err)
-	// Deprecated: Remove self-signed cert provider as a part of
+	// Deprecated: Remove selfAtt as a part of
 	//  https://blocky.atlassian.net/browse/BKY-5620
 	selfAtt, err := base64.StdEncoding.DecodeString(internal.SelfSignedAttestationB64)
 	require.NoError(t, err)

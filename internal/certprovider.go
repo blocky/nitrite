@@ -133,7 +133,7 @@ func (cp *NitroCertProvider) Roots() (*x509.CertPool, error) {
 	return cp.rootCerts, nil
 }
 
-// Deprecated: Remove SelfSignedCertProvider as part of https://blocky.atlassian.net/browse/BKY-5620
+// Deprecated: Remove selfSignedCertDER as part of https://blocky.atlassian.net/browse/BKY-5620
 //
 //go:embed assets/selfsigned_cert.der
 var selfSignedCertDER []byte
@@ -142,17 +142,17 @@ var selfSignedCertDER []byte
 type SelfSignedCertProvider struct {
 }
 
-// Deprecated: Remove SelfSignedCertProvider as part of https://blocky.atlassian.net/browse/BKY-5620
+// Deprecated: Remove NewSelfSignedCertProvider as part of https://blocky.atlassian.net/browse/BKY-5620
 func NewSelfSignedCertProvider() *SelfSignedCertProvider {
 	return &SelfSignedCertProvider{}
 }
 
-// Deprecated: Remove SelfSignedCertProvider as part of https://blocky.atlassian.net/browse/BKY-5620
+// Deprecated: Remove SelfSignedCertProvider.Roots as part of https://blocky.atlassian.net/browse/BKY-5620
 func (cp *SelfSignedCertProvider) Roots() (*x509.CertPool, error) {
 	return cp.RootWithCert(selfSignedCertDER)
 }
 
-// Deprecated: Remove SelfSignedCertProvider as part of https://blocky.atlassian.net/browse/BKY-5620
+// Deprecated: Remove SelfSignedCertProvider.RootWithCert as part of https://blocky.atlassian.net/browse/BKY-5620
 func (_ *SelfSignedCertProvider) RootWithCert(
 	derCert []byte,
 ) (
