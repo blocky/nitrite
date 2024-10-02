@@ -42,6 +42,8 @@ func main() {
 	}
 
 	var certProvider = nitrite.EmbeddedNitroCertProvider
+	// TODO: remove the support for self-signed attestations as part of
+	//  https://blocky.atlassian.net/browse/BKY-5620
 	if *fAllowSelfSigned {
 		certProvider = nitrite.SelfSignedCertProvider
 	}
