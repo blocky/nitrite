@@ -292,7 +292,47 @@ func TestCoseSign1_GetSigningAlgorithm(t *testing.T) {
 
 		// then
 		assert.ErrorContains(t, err, "unmarshaling cose protected header")
-		assert.Equal(t, signingAlg, internal.BadOrMissingAlgorithm)
+		assert.Equal(t, signingAlg, internal.MissingSigningAlgorithm)
+	})
+
+	t.Run("unsupported signing algorithm int", func(t *testing.T) {
+		// given
+		coseSign1 := internal.CoseSign1{}
+		err := coseSign1.UnmarshalBinary(nitroAtt)
+		require.NoError(t, err)
+
+		coseHeader := internal.CoseHeader{}
+		coseHeader.Alg = int64(-8)
+		headerBytes, err := cbor.Marshal(coseHeader)
+		require.NoError(t, err)
+		coseSign1.Protected = headerBytes
+
+		// when
+		signingAlg, err := coseSign1.GetSigningAlgorithm()
+
+		// then
+		assert.ErrorContains(t, err, "unsupported signing algorithm int")
+		assert.Equal(t, signingAlg, internal.BadSigningAlgorithm)
+	})
+
+	t.Run("unsupported signing algorithm string", func(t *testing.T) {
+		// given
+		coseSign1 := internal.CoseSign1{}
+		err := coseSign1.UnmarshalBinary(nitroAtt)
+		require.NoError(t, err)
+
+		coseHeader := internal.CoseHeader{}
+		coseHeader.Alg = "unsupported signing algorithm"
+		headerBytes, err := cbor.Marshal(coseHeader)
+		require.NoError(t, err)
+		coseSign1.Protected = headerBytes
+
+		// when
+		signingAlg, err := coseSign1.GetSigningAlgorithm()
+
+		// then
+		assert.ErrorContains(t, err, "unsupported signing algorithm string")
+		assert.Equal(t, signingAlg, internal.BadSigningAlgorithm)
 	})
 
 	t.Run("unsupported signing algorithm type", func(t *testing.T) {
@@ -310,8 +350,8 @@ func TestCoseSign1_GetSigningAlgorithm(t *testing.T) {
 		signingAlg, err := coseSign1.GetSigningAlgorithm()
 
 		// then
-		assert.ErrorContains(t, err, "unsupported signing algorithm type")
-		assert.Equal(t, signingAlg, internal.BadOrMissingAlgorithm)
+		assert.ErrorContains(t, err, "missing or wrong signing algorithm type")
+		assert.Equal(t, signingAlg, internal.MissingSigningAlgorithm)
 	})
 }
 

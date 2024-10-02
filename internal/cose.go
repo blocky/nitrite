@@ -12,7 +12,8 @@ import (
 type SigningAlgorithm int
 
 const (
-	BadOrMissingAlgorithm SigningAlgorithm = iota
+	BadSigningAlgorithm SigningAlgorithm = iota
+	MissingSigningAlgorithm
 	ES384
 )
 
@@ -129,7 +130,7 @@ func (c CoseSign1) GetSigningAlgorithm() (SigningAlgorithm, error) {
 	header := CoseHeader{}
 	err := cbor.Unmarshal(c.Protected, &header)
 	if nil != err {
-		return BadOrMissingAlgorithm,
+		return MissingSigningAlgorithm,
 			fmt.Errorf("unmarshaling cose protected header: %w", err)
 	}
 
@@ -139,7 +140,7 @@ func (c CoseSign1) GetSigningAlgorithm() (SigningAlgorithm, error) {
 		case -35:
 			return ES384, nil
 		default:
-			return BadOrMissingAlgorithm,
+			return BadSigningAlgorithm,
 				fmt.Errorf("unsupported signing algorithm int '%v'", intAlg)
 		}
 	}
@@ -150,11 +151,11 @@ func (c CoseSign1) GetSigningAlgorithm() (SigningAlgorithm, error) {
 		case "ES384":
 			return ES384, nil
 		default:
-			return BadOrMissingAlgorithm,
+			return BadSigningAlgorithm,
 				fmt.Errorf("unsupported signing algorithm string '%s'", strAlg)
 		}
 	}
-	return BadOrMissingAlgorithm, fmt.Errorf("unsupported signing algorithm type")
+	return MissingSigningAlgorithm, fmt.Errorf("missing or wrong signing algorithm type")
 }
 
 func (h *CoseHeader) AlgorithmInt() (int64, bool) {
