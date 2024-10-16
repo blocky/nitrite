@@ -1,5 +1,5 @@
 # The idiomatic way to disable test caching explicitly is to use -count=1
-GOTEST=go test -count=1
+GOTEST=go test -count=1 -race
 
 .PHONY: tidy
 tidy:

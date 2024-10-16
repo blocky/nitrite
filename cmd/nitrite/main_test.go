@@ -1,15 +1,16 @@
 package main_test
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"testing"
 	"time"
 
-	"github.com/ionrock/procs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -17,40 +18,22 @@ import (
 	"github.com/blocky/nitrite/internal"
 )
 
-func runNitriteWithEnv(
-	cmd string,
-	env map[string]string,
-) (nitrite.Document, error) {
-	nitriteProc := procs.NewProcess(cmd)
-	nitriteProc.OutputHandler = func(line string) string { return line }
-	nitriteProc.ErrHandler = func(line string) string { return line }
-	nitriteProc.Env = procs.ParseEnv(os.Environ())
-	for k, v := range env {
-		nitriteProc.Env[k] = v
-	}
+func runNitrite(cmd string) (nitrite.Document, error) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	nitriteProc := exec.Command("bash", "-c", cmd)
+	nitriteProc.Stdout = &stdout
+	nitriteProc.Stderr = &stderr
+	nitriteProc.Env = os.Environ()
 
-	err := nitriteProc.Start()
-	if err != nil {
-		return nitrite.Document{},
-			fmt.Errorf("starting nitrite process: %w", err)
-	}
-
-	err = nitriteProc.Wait()
-	if err != nil {
-		errOut, errOutErr := nitriteProc.ErrOutput()
-		err = errors.Join(err, errOutErr)
-		return nitrite.Document{},
-			fmt.Errorf("waiting on nitrite process '%s': %w", errOut, err)
-	}
-
-	outBytes, err := nitriteProc.Output()
-	if err != nil {
-		return nitrite.Document{},
-			fmt.Errorf("getting nitrite process output: %w", err)
+	if err := nitriteProc.Run(); err != nil {
+		errOut := errors.New(stderr.String())
+		lErr := fmt.Errorf("running command: %w", err)
+		return nitrite.Document{}, errors.Join(errOut, lErr)
 	}
 
 	output := nitrite.Document{}
-	err = json.Unmarshal(outBytes, &output)
+	err := json.Unmarshal(stdout.Bytes(), &output)
 	if err != nil {
 		return nitrite.Document{},
 			fmt.Errorf("unmarshaling nitrite process output: %w", err)
@@ -107,7 +90,7 @@ func TestExec(t *testing.T) {
 			}
 
 			// when
-			outDoc, err := runNitriteWithEnv(cmd, nil)
+			outDoc, err := runNitrite(cmd)
 
 			// then
 			require.NoError(t, err)
@@ -125,7 +108,7 @@ func TestExec(t *testing.T) {
 		cmd += " -attestation " + internal.DebugNitroAttestationB64
 
 		// when
-		_, err := runNitriteWithEnv(cmd, nil)
+		_, err := runNitrite(cmd)
 
 		// then
 		assert.ErrorContains(t, err, "attestation was generated in debug mode")
@@ -141,7 +124,7 @@ func TestExec(t *testing.T) {
 		cmd += " -attestation " + internal.SelfSignedAttestationB64
 
 		// when
-		_, err := runNitriteWithEnv(cmd, nil)
+		_, err := runNitrite(cmd)
 
 		// then
 		assert.ErrorContains(t, err, "certificate signed by unknown authority")
