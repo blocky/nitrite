@@ -29,15 +29,6 @@ pre-pr: mock lint test
 
 .PHONY: mock
 mock: tidy
-# There is a corner case where removing all mocks before regenerating them can
-# cause a deadlock. If you introduce a new package dependency to your code and
-# then delete mocks, then you can't run `go mod tidy` because mocks are missing
-# and you can't run `mockery` because of a missing dependency.
-# To avoid this, we first run `mockery --dry-run` to see if mocks can be
-# regenerated. If that command fails, the `mock` target stops execution.
-	@mockery --dry-run --config=mockery.yaml
-# If we can regenerate mocks, remove all mocks and generate, to make sure old
-# mocks purged.
 	@rm -rf mocks
 	@mockery --quiet --config=mockery.yaml
 
